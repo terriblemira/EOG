@@ -3,3 +3,4 @@ from stream import get_stream_inlet
 
 inlet = get_stream_inlet()
 # Continue processing the live stream using inlet
+
