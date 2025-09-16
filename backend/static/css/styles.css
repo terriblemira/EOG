@@ -1,0 +1,12 @@
+:root { font-family: system-ui, Arial, sans-serif; }
+body { margin: 0; padding: 2rem; background: #0b0f14; color: #e6eef8; }
+header { margin-bottom: 1.5rem; }
+h1 { margin: 0; font-size: 1.6rem; }
+.btn {
+  display: inline-block; padding: 0.6rem 1rem; margin: 0.4rem 0.4rem 0 0;
+  border: 1px solid #3a79ff; border-radius: 10px; background: #183766; color: #e6eef8;
+  text-decoration: none; cursor: pointer;
+}
+.btn[disabled] { opacity: 0.5; cursor: not-allowed; }
+.grid { display: grid; grid-template-columns: repeat(3, minmax(120px, 1fr)); gap: 0.6rem; max-width: 520px; }
+p { color: #b8c7da; }
