@@ -1,5 +1,16 @@
 {% extends "base.html" %}
 {% block content %}
-  <p>Welcome! Start by calibrating your input.</p>
-  <a class="btn" href="/calibrate">Calibrate</a>
+  <section class="center">
+    <p>press enter or blink to calibrate</p>
+    <a id="calBtn" class="btn btn-giant" href="/calibrate">Calibrate</a>
+  </section>
+  <script>
+    // “Press Enter” behavior
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        document.getElementById('calBtn').click();
+      }
+    });
+    // TODO: “blink to calibrate” will hook into LSL later
+  </script>
 {% endblock %}
