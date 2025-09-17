@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block content %}
+  <section class="ninegrid" aria-label="Nine quadrant selection">
+    <!-- Top row: game options -->
+    <div class="quad" data-key="q" data-id="1" aria-label="Top-left (Snake)">
+      <a class="btn btn-giant btn-fill" href="/snake" aria-label="Launch Snake" title="Snake">Snake</a>
+    </div>
+    <div class="quad" data-key="w" data-id="2" aria-label="Top-center (Pong)">
+      <a class="btn btn-giant btn-fill" href="#" aria-label="Launch Pong" title="Pong">Pong</a>
+    </div>
+    <div class="quad" data-key="e" data-id="3" aria-label="Top-right (Game 3)">
+      <a class="btn btn-giant btn-fill" href="#" aria-label="Launch Game 3" title="Game 3">Game 3</a>
+    </div>
+
+    <!-- Middle row -->
+    <div class="quad" data-key="a" data-id="4"></div>
+    <div class="quad" data-key="s" data-id="5"></div>
+    <div class="quad" data-key="d" data-id="6"></div>
+
+    <!-- Bottom row -->
+    <div class="quad" data-key="z" data-id="7"></div>
+    <div class="quad" data-key="x" data-id="8"></div>
+    <div class="quad" data-key="c" data-id="9"></div>
+  </section>
+
+  <div aria-live="polite" aria-atomic="true" class="sr-only" id="live"></div>
+
+  <script>
+    (function () {
+      const quads = Array.from(document.querySelectorAll('.ninegrid .quad'));
+      const byKey = Object.fromEntries(quads.map(q => [q.dataset.key, q]));
+      const live = document.getElementById('live');
+
+      let lastKey = null, lastTime = 0;
+      const DOUBLE_PRESS_MS = 800;
+
+      function setActive(q) {
+        quads.forEach(el => el.classList.remove('active'));
+        if (q) {
+          q.classList.add('active');
+          live.textContent = `Selected quadrant ${q.dataset.id}`;
+          setTimeout(() => q.classList.remove('active'), 900);
+        }
+      }
+
+      function activate(q) {
+        const btn = q.querySelector('.btn');
+        if (btn && !btn.classList.contains('disabled')) btn.click();
+      }
+
+      document.addEventListener('keydown', (e) => {
+        const key = e.key.toLowerCase();
+        const q = byKey[key];
+        if (!q) return;
+        const now = performance.now();
+        const isDouble = (key === lastKey) && ((now - lastTime) <= DOUBLE_PRESS_MS);
+        setActive(q);
+        if (isDouble) activate(q);
+        lastKey = key; lastTime = now;
+      });
+    })();
+  </script>
+{% endblock %}

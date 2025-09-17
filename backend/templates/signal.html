@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="center">
+  <h2>Signal Check</h2>
+  <p>We’re looking for an LSL stream from your Mentalab device.</p>
+
+  <div id="lsl-status" class="status status-waiting">Connecting…</div>
+  <div class="actions" style="margin-top: .8rem;">
+    <span>Messages: <span id="lsl-rate">0.0 msg/s</span></span>
+    <span style="margin-left: 1rem;">Channels: <span id="lsl-chan">0</span></span>
+  </div>
+
+  <div style="width: min(720px, 90vw); height: 160px; margin-top: 1rem;">
+    <canvas id="lsl-canvas" style="width: 100%; height: 100%; border: 1px solid #1f2a3a; border-radius: 8px;"></canvas>
+  </div>
+
+  <div class="actions" style="margin-top: 1rem;">
+    <a class="btn btn-primary" href="/index">Continue</a>
+    <button id="retry" class="btn btn-secondary" type="button">Retry status ping</button>
+  </div>
+
+  <p class="hint">Tip: ensure the Mentalab app is streaming over LSL and the device name matches your config.</p>
+</section>
+<script>
+  // keep your existing REST ping if you like
+  async function ping() {
+    const el = document.getElementById('lsl-status');
+    try {
+      const res = await fetch(`/api/lsl/status`);
+      const data = await res.json();
+      if (data.ok) {
+        el.textContent = `Signal detected ("${data.name}")`;
+        el.className = "status status-ok";
+      } else {
+        el.textContent = "No signal detected via /api/lsl/status.";
+        el.className = "status status-fail";
+      }
+    } catch {
+      el.textContent = "Error checking signal.";
+      el.className = "status status-fail";
+    }
+  }
+  document.getElementById('retry').addEventListener('click', ping);
+</script>
+<!-- include the streaming client -->
+<script src="{{ url_for('static', path='js/lsl_client.js') }}?v=1"></script>
+{% endblock %}

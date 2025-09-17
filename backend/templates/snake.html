@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block content %}
+<section>
+  <h2>Snake (EOG-controlled)</h2>
+  <p>Controls: Arrow keys (debug) or EOG directions via /ws/cmd.</p>
+  <div style="display:flex; gap:1rem; align-items:center; margin-bottom:.5rem;">
+    <div id="snake-conn" class="status status-waiting">Connecting…</div>
+    <div>Last cmd: <code id="snake-last">-</code></div>
+    <div>Score: <strong id="snake-score">0</strong></div>
+  </div>
+  <canvas id="snake-canvas" width="480" height="480" style="border:1px solid #1f2a3a; border-radius:8px; width:min(90vw, 480px); height:min(90vw, 480px);"></canvas>
+</section>
+<script src="{{ url_for('static', path='js/snake.js') }}?v=1"></script>
+{% endblock %}
