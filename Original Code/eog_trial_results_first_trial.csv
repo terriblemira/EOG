@@ -1,0 +1,19 @@
+step_index,target_name,expected,detected,confidence,ts_detected,correct
+0,Center,center,left,235.39728469347165,25.954813480377197,False
+1,Left,left,,,,False
+2,Center,center,,,,True
+3,Right,right,,,,False
+4,Center,center,,,,True
+5,Top,up,,,,False
+6,Center,center,,,,True
+7,Bottom,down,,,,False
+8,Center,center,,,,True
+9,Left,left,,,,False
+10,Right,right,left,223.23764516549585,89.33700251579285,False
+11,Left,left,left,258.2837111681874,89.33700251579285,True
+12,Top,up,up,162.8451547047596,94.73959636688232,True
+13,Bottom,down,down,252.15960012198875,98.067622423172,True
+14,Top,up,,,,False
+,,,,,,
+,SUMMARY,�,�,�,�,7/15 (46.7%)
+,THRESHOLDS,H_THRESH: 202.49059868779142,V_THRESH: 35.0,�,�,�
