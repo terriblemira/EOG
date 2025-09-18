@@ -1,6 +1,7 @@
 from pylsl import StreamInlet, resolve_byprop
 
-device_name = "Explore_8443_ExG"
+# Modify this to match your device's stream name!
+device_name = "Explore_8441_ExG" #Explore_XXXX_ExG
 
 def get_stream_inlet(name=device_name, timeout=5.0):
     """

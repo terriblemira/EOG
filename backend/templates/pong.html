@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="game-wrap">
+  <div class="game-hdr">
+    <h2>Pong (EOG-controlled)</h2>
+    <div class="hud">
+      <div id="pong-conn" class="status status-waiting">Connecting…</div>
+      <div>Last cmd: <code id="pong-last">-</code></div>
+      <div>Score: <strong id="pong-score">0</strong></div>
+      <button id="pong-restart" class="btn btn-secondary" type="button">Restart</button>
+    </div>
+  </div>
+
+  <!-- Wide rectangular playfield -->
+  <canvas id="pong-canvas" width="800" height="480" class="game-canvas"></canvas>
+</section>
+<script src="{{ url_for('static', path='js/pong.js') }}?v=1"></script>
+{% endblock %}

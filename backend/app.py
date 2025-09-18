@@ -37,6 +37,11 @@ def games(request: Request):
 def snake(request: Request):
     return templates.TemplateResponse("snake.html", {"request": request})
 
+@app.get("/pong", response_class=HTMLResponse)
+def pong(request: Request):
+    return templates.TemplateResponse("pong.html", {"request": request})
+
+
 # ---------- API for signal presence ----------
 @app.get("/api/lsl/status")
 async def lsl_status(
