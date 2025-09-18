@@ -17,7 +17,7 @@
   let food = spawnFood();
   let alive = true;
   let score = 0;
-  let tickMs = 110;                   // game speed (lower = faster)
+  let tickMs = 180;                   // game speed (lower = faster)
 
   // Prevent reversals
   function setDirection(cmd) {
@@ -101,7 +101,7 @@
       scoreEl.textContent = String(score);
       food = spawnFood();
       // optional speed-up
-      if (tickMs > 60) tickMs -= 2;
+      if (tickMs > 60) tickMs -= 1;
     } else {
       snake.pop();
     }

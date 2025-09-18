@@ -1,15 +1,21 @@
 {% extends "base.html" %}
 {% block content %}
   <section class="ninegrid" aria-label="Nine quadrant selection">
-    <!-- Top row: game options -->
-    <div class="quad" data-key="q" data-id="1" aria-label="Top-left (Snake)">
-      <a class="btn btn-giant btn-fill" href="/snake" aria-label="Launch Snake" title="Snake">Snake</a>
+    <!-- Top row: logos only -->
+    <div class="quad" data-key="q" data-id="1" aria-label="Snake">
+      <a href="/snake" title="Snake">
+        <img class="logo" src="{{ url_for('static', path='img/snake.png') }}" alt="Snake logo">
+      </a>
     </div>
-    <div class="quad" data-key="w" data-id="2" aria-label="Top-center (Pong)">
-      <a class="btn btn-giant btn-fill" href="#" aria-label="Launch Pong" title="Pong">Pong</a>
+    <div class="quad" data-key="w" data-id="2" aria-label="Pong">
+      <a href="/pong" title="Pong">
+        <img class="logo" src="{{ url_for('static', path='img/pong.png') }}" alt="Pong logo">
+      </a>
     </div>
-    <div class="quad" data-key="e" data-id="3" aria-label="Top-right (Game 3)">
-      <a class="btn btn-giant btn-fill" href="#" aria-label="Launch Game 3" title="Game 3">Game 3</a>
+    <div class="quad" data-key="e" data-id="3" aria-label="Minecraft">
+      <a href="#" title="Minecraft">
+        <img class="logo" src="{{ url_for('static', path='img/minecraft.png') }}" alt="Minecraft logo">
+      </a>
     </div>
 
     <!-- Middle row -->
@@ -30,24 +36,24 @@
       const quads = Array.from(document.querySelectorAll('.ninegrid .quad'));
       const byKey = Object.fromEntries(quads.map(q => [q.dataset.key, q]));
       const live = document.getElementById('live');
-
       let lastKey = null, lastTime = 0;
       const DOUBLE_PRESS_MS = 800;
 
+      function clearState() { quads.forEach(el => el.classList.remove('active','hover')); }
       function setActive(q) {
-        quads.forEach(el => el.classList.remove('active'));
+        clearState();
         if (q) {
           q.classList.add('active');
-          live.textContent = `Selected quadrant ${q.dataset.id}`;
+          live.textContent = `Selected ${q.dataset.id}`;
           setTimeout(() => q.classList.remove('active'), 900);
         }
       }
-
       function activate(q) {
-        const btn = q.querySelector('.btn');
-        if (btn && !btn.classList.contains('disabled')) btn.click();
+        const link = q.querySelector('a');
+        if (link) link.click();
       }
 
+      // Keyboard: qwe/asd/zxc
       document.addEventListener('keydown', (e) => {
         const key = e.key.toLowerCase();
         const q = byKey[key];
@@ -58,6 +64,19 @@
         if (isDouble) activate(q);
         lastKey = key; lastTime = now;
       });
+
+      // Mouse hover: add/remove .hover for glow
+      quads.forEach(q => {
+        q.addEventListener('mouseenter', () => {
+          clearState();
+          q.classList.add('hover');
+        });
+        q.addEventListener('mouseleave', () => q.classList.remove('hover'));
+      });
+
+      // (Future) EOG “hover”: when you have a target quadrant index (1–9),
+      // call: clearState(); quads[targetIndex-1].classList.add('hover');
     })();
   </script>
+
 {% endblock %}

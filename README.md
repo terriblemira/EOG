@@ -3,10 +3,11 @@ Electrooculography (EOG) signals use BCI technology to detect eye movements. We 
 
 ## Game Glasses
 
-Bare-bones web app skeleton for controlling simple games via EOG (future).
-Tech: FastAPI + Jinja templates + static JS/CSS. WebSocket placeholder for LSL.
+Web-app to host games and more to be controlled by EOG
 
 ## Quick Start
+
+[Insert instructions on connecting mentalab and running the LSL stream]
 
 ```bash
 cd backend
