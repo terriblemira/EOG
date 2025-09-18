@@ -53,7 +53,7 @@ TOTAL_CHANNELS = 8
 CHANNEL_INDICES = [0, 1, 2, 7]  # (we'll form H = ch1 - ch3, V = ch8 - ch2)
 
 LOWCUT = 0.4
-HIGHCUT = 30
+HIGHCUT = 20
 FILTER_ORDER = 4
 
 PEAK_DISTANCE = 125  # samples
@@ -80,6 +80,10 @@ def butter_bandpass(lowcut, highcut, fs, order):
 
 def bandpass_filter(data, lowcut, highcut, fs, order):
     b, a = butter_bandpass(lowcut, highcut, fs, order)
+    return sig.filtfilt(b, a, data)
+
+def notch_filter(data, fs, freq=50, bandwidth=5):
+    b, a = sig.iirnotch(freq, bandwidth, fs)
     return sig.filtfilt(b, a, data)
 
 def detect_eye_movements(signal, timestamps, h_thresh, v_thresh):
@@ -143,23 +147,25 @@ def run_calibration(eog_reader, window, font, calibration_sequence):
         "down": {"peaks": []},
         "center": {"peaks": []}
     }
+
+    # Clear the detection queue
     eog_reader.out_queue.clear()
-    instruction_surf = font.render("Calibration: Follow the dot. Press SPACEBAR when you start looking.", True, BLACK)
+
+    # Instructions for calibration
+    instruction_surf = font.render("Calibration: Press SPACEBAR, then look at the target.", True, BLACK)
     window.blit(instruction_surf, (10, 10))
     pygame.display.flip()
     time.sleep(2)
 
-    # Record baseline at center
+    # Step 1: Record baseline at center
     window.fill(BG_COLOR)
-    for name, p in calibration_sequence:
-        pygame.draw.circle(window, RED, p, DOT_RADIUS_STATIC)
     pygame.draw.circle(window, BLUE, center_pos, DOT_RADIUS_ACTIVE)
-    instruction = "Look at the CENTER. Press SPACEBAR when ready."
+    instruction = "Look at the CENTER and press SPACEBAR."
     surf = font.render(instruction, True, BLACK)
     window.blit(surf, (10, 50))
     pygame.display.flip()
 
-    # Record baseline for 2 seconds
+    # Wait for SPACEBAR to record baseline
     waiting = True
     while waiting:
         for event in pygame.event.get():
@@ -168,65 +174,81 @@ def run_calibration(eog_reader, window, font, calibration_sequence):
                 return 95, 50
             if event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
                 waiting = False
+        pygame.event.pump()
+        clock.tick(60)
+
+    # Record baseline for 2 seconds
+    baseline_start = time.time()
+    while time.time() - baseline_start < 2.0:
         if eog_reader.out_queue:
             det = eog_reader.out_queue[-1]
             if det.direction == "center":
                 calibration_data["center"]["peaks"].append(det.confidence)
         pygame.event.pump()
         clock.tick(60)
-    time.sleep(2)  # Record baseline
 
+    # Calculate center baseline
+    center_baseline = np.mean(calibration_data["center"]["peaks"]) if calibration_data["center"]["peaks"] else 0
+    print(f"Center baseline confidence: {center_baseline:.1f}")
+
+    # Step 2: Calibrate each direction relative to baseline
     for target_name, pos in calibration_sequence[1:]:  # Skip the first center
+        # Show center dot and wait for SPACEBAR
         window.fill(BG_COLOR)
-        for name, p in calibration_sequence:
-            pygame.draw.circle(window, RED, p, DOT_RADIUS_STATIC)
-        pygame.draw.circle(window, BLUE, pos, DOT_RADIUS_ACTIVE)
-        instruction = f"Look at {target_name}. Press SPACEBAR when you start looking."
+        pygame.draw.circle(window, RED, pos, DOT_RADIUS_STATIC)  # Show target location
+        pygame.draw.circle(window, BLUE, center_pos, DOT_RADIUS_ACTIVE)  # Start at center
+        instruction = f"Press SPACEBAR, then look at {target_name}."
         surf = font.render(instruction, True, BLACK)
         window.blit(surf, (10, 50))
         pygame.display.flip()
 
-        # Start recording immediately when the target appears
-        start_time = time.time()
-        recording = True
-        buffer_start_time = time.time()
-        recorded_peaks = []
-
-        while recording:
+        # Wait for SPACEBAR
+        waiting = True
+        while waiting:
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     pygame.quit()
                     return 95, 50
                 if event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
-                    buffer_start_time = time.time()
-
-            if eog_reader.out_queue:
-                det = eog_reader.out_queue[-1]
-                if det.direction in calibration_data:
-                    recorded_peaks.append((det.ts, det.direction, det.confidence))
-
-            if (time.time() - buffer_start_time) >= 2.0 and buffer_start_time != start_time:
-                recording = False
-
+                    waiting = False
             pygame.event.pump()
             clock.tick(60)
 
-        for ts, direction, confidence in recorded_peaks:
-            if (ts >= buffer_start_time):
-                calibration_data[direction]["peaks"].append(confidence)
+        # Move dot to target and record EOG data for 2 seconds
+        window.fill(BG_COLOR)
+        for name, p in calibration_sequence:
+            pygame.draw.circle(window, RED, p, DOT_RADIUS_STATIC)
+        pygame.draw.circle(window, BLUE, pos, DOT_RADIUS_ACTIVE)  # Dot moves to target
+        instruction = f"Looking at {target_name}..."
+        surf = font.render(instruction, True, BLACK)
+        window.blit(surf, (10, 50))
+        pygame.display.flip()
 
-    # Calculate thresholds relative to center baseline
-    center_baseline = np.mean(calibration_data["center"]["peaks"]) if calibration_data["center"]["peaks"] else 0
+        # Record EOG data for 2 seconds
+        start_time = time.time()
+        while time.time() - start_time < 2.0:
+            if eog_reader.out_queue:
+                det = eog_reader.out_queue[-1]
+                if det.direction in calibration_data:
+                    # Store relative confidence (subtract baseline)
+                    relative_confidence = det.confidence - center_baseline
+                    calibration_data[det.direction]["peaks"].append(relative_confidence)
+            pygame.event.pump()
+            clock.tick(60)
 
+    # Step 3: Calculate thresholds relative to baseline
     H_THRESH = 0.7 * max(
-        (np.mean(calibration_data["left"]["peaks"]) - center_baseline) if calibration_data["left"]["peaks"] else 95,
-        (np.mean(calibration_data["right"]["peaks"]) - center_baseline) if calibration_data["right"]["peaks"] else 95
+        np.mean(calibration_data["left"]["peaks"]) if calibration_data["left"]["peaks"] else 95,
+        np.mean(calibration_data["right"]["peaks"]) if calibration_data["right"]["peaks"] else 95
     )
     V_THRESH = 0.7 * max(
-        (np.mean(calibration_data["up"]["peaks"]) - center_baseline) if calibration_data["up"]["peaks"] else 50,
-        (np.mean(calibration_data["down"]["peaks"]) - center_baseline) if calibration_data["down"]["peaks"] else 50
+        np.mean(calibration_data["up"]["peaks"]) if calibration_data["up"]["peaks"] else 50,
+        np.mean(calibration_data["down"]["peaks"]) if calibration_data["down"]["peaks"] else 50
     )
+
+    print(f"Calculated thresholds relative to baseline: H_THRESH={H_THRESH:.1f}, V_THRESH={V_THRESH:.1f}")
     return H_THRESH, V_THRESH
+
 
 
 def wait_for_spacebar(window, font, message="Press SPACEBAR to continue..."):
@@ -303,8 +325,9 @@ class EOGReader(threading.Thread):
                 ch3 = np.array(self.channel_buffers[2])
                 ch8 = np.array(self.channel_buffers[7])
 
-                H = ch1 - ch3
-                V = ch8 - ch2
+                H = notch_filter(ch1 - ch3, FS)
+                V = notch_filter(ch8 - ch2, FS)
+
 
                 try:
                     Hf = bandpass_filter(H, LOWCUT, HIGHCUT, FS, FILTER_ORDER)
