@@ -202,3 +202,14 @@ p { color: #b8c7da; }
   transform: scale(1.03);
 }
 
+/* Fullscreen calibration canvas */
+.cal-canvas {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: #0e1520;   /* dark background */
+  z-index: 10;
+}
+

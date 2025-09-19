@@ -1,6 +1,124 @@
 {% extends "base.html" %}
 {% block content %}
+<section id="cal-ui" class="game-wrap">
   <h2>Calibration</h2>
-  <p>Calibration placeholder. (Server printed “calibrate here”)</p>
-  <a class="btn" href="/games">Continue to Games</a>
+  <p>Follow the dot: keep eyes on the moving target during each phase.</p>
+
+  <div id="cal-status" class="status status-waiting">Not started</div>
+
+  <div class="actions">
+    <button class="btn btn-primary" id="cal-start">Start</button>
+    <button class="btn btn-secondary" id="cal-cancel">Cancel</button>
+  </div>
+
+  <pre id="cal-out" style="text-align:left; max-width:720px; white-space:pre-wrap;"></pre>
+</section>
+
+<!-- Fullscreen calibration canvas -->
+<canvas id="cal-canvas" class="cal-canvas"></canvas>
+
+<script>
+(function(){
+  const ui      = document.getElementById('cal-ui');
+  const canvas  = document.getElementById('cal-canvas');
+  const ctx     = canvas.getContext('2d');
+  const statusEl= document.getElementById('cal-status');
+  const outEl   = document.getElementById('cal-out');
+
+  function resizeCanvas() {
+    canvas.width  = window.innerWidth;
+    canvas.height = window.innerHeight;
+  }
+  window.addEventListener('resize', resizeCanvas);
+  resizeCanvas();
+
+  const PHASES = [
+    {name:"center", dur:2000, pos:[0.5,0.5]},
+    {name:"left",   dur:2500, pos:[0.15,0.5]},
+    {name:"right",  dur:2500, pos:[0.85,0.5]},
+    {name:"up",     dur:2500, pos:[0.5,0.2]},
+    {name:"down",   dur:2500, pos:[0.5,0.8]},
+    {name:"center", dur:1500, pos:[0.5,0.5]}
+  ];
+
+  function drawDot(nx, ny) {
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+
+    // 90% inset transform
+    const marginX = canvas.width * 0.05;
+    const marginY = canvas.height * 0.05;
+    const usableW = canvas.width * 0.90;
+    const usableH = canvas.height * 0.90;
+
+    const x = marginX + nx * usableW;
+    const y = marginY + ny * usableH;
+
+    // draw safe background area (optional highlight)
+    ctx.fillStyle = "#0e1520";
+    ctx.fillRect(marginX, marginY, usableW, usableH);
+
+    // draw calibration dot
+    ctx.fillStyle = "#fff";
+    ctx.beginPath();
+    ctx.arc(x, y, 14, 0, Math.PI*2);
+    ctx.fill();
+  }
+
+  function setStatus(text, ok=false, bad=false) {
+    statusEl.textContent = text;
+    statusEl.className = "status " + (ok ? "status-ok" : bad ? "status-fail" : "status-waiting");
+  }
+
+  let ws;
+  async function runCalibration() {
+    ui.style.display = 'none';
+    canvas.style.display = 'block';
+    setStatus("Connecting…");
+
+    ws = new WebSocket(`ws://${location.host}/ws/cal`);
+    ws.onopen = async () => {
+      setStatus("Connected. Starting…");
+      ws.send(JSON.stringify({type:"start"}));
+      await runPhases();
+      ws.send(JSON.stringify({type:"finish"}));
+    };
+    ws.onmessage = (e) => {
+      try {
+        const m = JSON.parse(e.data);
+        if (m.status === "phase_started") setStatus(`Collecting: ${m.name}…`);
+        if (m.status === "phase_done") setStatus(`Done: ${m.name}`);
+        if (m.status === "finished") {
+          setStatus("Calibration complete", true);
+          outEl.textContent = JSON.stringify(m.config, null, 2);
+          ui.style.display = 'grid';
+          canvas.style.display = 'none';
+        }
+      } catch {}
+    };
+    ws.onclose = () => setStatus("Disconnected", false, true);
+    ws.onerror = () => setStatus("Error", false, true);
+  }
+
+  function sleep(ms){ return new Promise(r=>setTimeout(r,ms)); }
+
+  async function runPhases() {
+    for (const p of PHASES) {
+      drawDot(p.pos[0], p.pos[1]);
+      ws.send(JSON.stringify({type:"phase", name:p.name, duration_ms:p.dur}));
+      await sleep(p.dur + 200);
+    }
+  }
+
+  document.getElementById('cal-start').addEventListener('click', runCalibration);
+  document.getElementById('cal-cancel').addEventListener('click', () => {
+    try { ws && ws.close(); } catch {}
+    setStatus("Canceled", false, true);
+    ui.style.display = 'grid';
+    canvas.style.display = 'none';
+  });
+
+  // hide canvas initially
+  canvas.style.display = 'none';
+})();
+</script>
 {% endblock %}
