@@ -22,7 +22,9 @@ import collections
 import csv
 import os
 from dataclasses import dataclass
-
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
 import numpy as np
 from pylsl import StreamInlet, resolve_byprop
 from scipy import signal as sig
@@ -271,6 +273,52 @@ def wait_for_spacebar(window, font, message="Press SPACEBAR to continue..."):
         pygame.time.delay(100)  # Reduce CPU usage
     return True
 
+class Plotter(threading.Thread):
+    def __init__(self):
+        super().__init__(daemon=True)
+        self.running = True
+        self.times = []
+        self.raw_H = []
+        self.raw_V = []
+        self.processed_H = []
+        self.processed_V = []
+        self.plot_counter = 0
+
+    def update_plot(self, times, raw_H, raw_V, processed_H, processed_V):
+        self.times = times
+        self.raw_H = raw_H
+        self.raw_V = raw_V
+        self.processed_H = processed_H
+        self.processed_V = processed_V
+
+    def run(self):
+        while self.running:
+            if self.times:
+                fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 8))
+                ax1.plot(self.times, self.raw_H, label="Raw Horizontal", color="blue")
+                ax1.plot(self.times, self.raw_V, label="Raw Vertical", color="red")
+                ax1.set_title("Raw EOG Signals")
+                ax1.set_xlabel("Time (s)")
+                ax1.set_ylabel("Amplitude")
+                ax1.legend()
+                ax1.grid(True)
+
+                ax2.plot(self.times, self.processed_H, label="Processed Horizontal", color="blue")
+                ax2.plot(self.times, self.processed_V, label="Processed Vertical", color="red")
+                ax2.set_title("Processed EOG Signals")
+                ax2.set_xlabel("Time (s)")
+                ax2.set_ylabel("Amplitude")
+                ax2.legend()
+                ax2.grid(True)
+
+                plt.tight_layout()
+                plt.savefig(f"eog_plot_{self.plot_counter}.png")
+                plt.close(fig)
+                self.plot_counter += 1
+            time.sleep(0.1)  # Update every 100 ms
+
+    def stop(self):
+        self.running = False
 
 @dataclass
 class Detection:
@@ -305,6 +353,9 @@ class EOGReader(threading.Thread):
 
         self.start_time = time.time()
 
+        self.plotter = Plotter()
+        self.plotter.start()
+
     def run(self):
         DETECT_PERIOD = 0.1  # seconds between running detection on the buffer
         while self.running:
@@ -325,9 +376,11 @@ class EOGReader(threading.Thread):
                 ch3 = np.array(self.channel_buffers[2])
                 ch8 = np.array(self.channel_buffers[7])
 
+                # notch filtered signals
                 H = notch_filter(ch1 - ch3, FS)
                 V = notch_filter(ch8 - ch2, FS)
 
+                # bandpassed filtered signals
 
                 try:
                     Hf = bandpass_filter(H, LOWCUT, HIGHCUT, FS, FILTER_ORDER)
@@ -335,6 +388,10 @@ class EOGReader(threading.Thread):
                 except Exception:
                     # In case of filter warmup issues
                     continue
+                
+                self.plotter.update_plot(
+                    list(times), list(H), list(V), list(Hf), list(Vf)
+                )
 
                 sig_array = np.stack((Hf, Vf), axis=-1)
                 movements = detect_eye_movements(sig_array, times, self.H_THRESH, self.V_THRESH)
@@ -360,6 +417,7 @@ class EOGReader(threading.Thread):
 
     def stop(self):
         self.running = False
+        self.plotter.stop()
 
 # ==============================
 # --------- Main app -----------
