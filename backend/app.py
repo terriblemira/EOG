@@ -7,7 +7,8 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from stream import get_stream_inlet, has_lsl_stream
-from signal_interpret import SignalInterpreter
+from signal_interpret import SignalInterpreter, CalibrationConfig   # <-- add CalibrationConfig
+from calibration import CalibrationSession
 
 BASE_DIR = Path(__file__).resolve().parent
 app = FastAPI(title="Game Glasses")
@@ -51,30 +52,23 @@ async def lsl_status(
     ok = await asyncio.to_thread(has_lsl_stream, name, timeout)
     return JSONResponse({"ok": ok, "name": name})
 
+
 # ---------- Shared LSL inlet + broadcaster ----------
 _clients_lsl: set[WebSocket] = set()
 _clients_cmd: set[WebSocket] = set()
 _pump_task: asyncio.Task | None = None
 _pump_lock = asyncio.Lock()
 
-# Smooth streaming
 CHUNK_MAX_SAMPLES = 32
 PULL_TIMEOUT_SEC = 0.05
 TARGET_SEND_HZ = 20
 
-# Interpreter (adjust thresholds as needed)
+# Interpreter with initial defaults
 _interpreter = SignalInterpreter(
-    ema_alpha=0.2,
-    thresh_h=0.02,
-    thresh_v=0.02,
-    cooldown_ms=200
+    CalibrationConfig(ema_alpha=0.2, cooldown_ms=200)
 )
 
 async def _lsl_pump():
-    """
-    Background task: connect to LSL inlet; broadcast samples to /ws/lsl
-    and interpreted commands to /ws/cmd.
-    """
     loop = asyncio.get_event_loop()
     last_send = 0.0
     while True:
@@ -98,7 +92,7 @@ async def _lsl_pump():
                     inlet.pull_chunk, PULL_TIMEOUT_SEC, CHUNK_MAX_SAMPLES
                 )
                 if chunk and ts:
-                    # 1) Broadcast raw chunk to /ws/lsl subscribers (optional, keeps your signal page alive)
+                    # broadcast to /ws/lsl
                     now = loop.time()
                     if _clients_lsl:
                         min_interval = 1.0 / TARGET_SEND_HZ
@@ -115,7 +109,7 @@ async def _lsl_pump():
                         for ws in dead:
                             _clients_lsl.discard(ws)
 
-                    # 2) Run interpreter → maybe emit command to /ws/cmd clients
+                    # run interpreter → maybe emit command to /ws/cmd
                     cmd = _interpreter.process_chunk(chunk)
                     if cmd and _clients_cmd:
                         dead2 = []
@@ -138,7 +132,8 @@ async def _ensure_pump():
         if _pump_task is None or _pump_task.done():
             _pump_task = asyncio.create_task(_lsl_pump())
 
-# Raw LSL stream (signal page uses this)
+
+# ---------- WebSocket endpoints ----------
 @app.websocket("/ws/lsl")
 async def lsl_ws(ws: WebSocket):
     await ws.accept()
@@ -153,7 +148,58 @@ async def lsl_ws(ws: WebSocket):
     finally:
         _clients_lsl.discard(ws)
 
-# Commands stream (snake listens to this)
+
+_cal_session: CalibrationSession | None = None
+_cal_phase: str | None = None
+
+@app.websocket("/ws/cal")
+async def cal_ws(ws: WebSocket):
+    global _cal_session, _cal_phase
+    await ws.accept()
+    await _ensure_pump()
+    if _cal_session is None:
+        _cal_session = CalibrationSession()
+    await ws.send_json({"status":"ready"})
+
+    try:
+        while True:
+            msg = await ws.receive_json()
+            typ = msg.get("type")
+
+            if typ == "start":
+                _cal_session = CalibrationSession()
+                _cal_phase = None
+                await ws.send_json({"status": "started"})
+
+            elif typ == "phase":
+                name = msg.get("name")
+                duration = float(msg.get("duration_ms", 2000)) / 1000.0
+                _cal_phase = name
+                await ws.send_json({"status":"phase_started","name":name})
+
+                inlet = await asyncio.to_thread(get_stream_inlet)
+                import time
+                t0 = time.time()
+                while time.time() - t0 < duration:
+                    chunk, ts = await asyncio.to_thread(inlet.pull_chunk, 0.05, 64)
+                    if chunk:
+                        _cal_session.feed_chunk(name, chunk)
+                    await asyncio.sleep(0.005)
+
+                await ws.send_json({"status":"phase_done","name":name})
+                _cal_phase = None
+
+            elif typ == "finish":
+                cfg = _cal_session.compute_config()
+                _interpreter.update_config(cfg)
+                await ws.send_json({"status":"finished","config":cfg.__dict__})
+
+            else:
+                await ws.send_json({"status":"error","detail":"unknown message"})
+    except WebSocketDisconnect:
+        pass
+
+
 @app.websocket("/ws/cmd")
 async def cmd_ws(ws: WebSocket):
     await ws.accept()
