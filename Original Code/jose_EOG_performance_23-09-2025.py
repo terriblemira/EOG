@@ -175,179 +175,62 @@ def run_calibration(eog_reader, window, font, calibration_sequence):
     calibration_data = {
         "left": {"H": [], "V": []},
         "right": {"H": [], "V": []},
-        "up": {"H": [], "V": []},      # Note: lowercase 'up'
-        "down": {"H": [], "V": []},    # Note: lowercase 'down'
-        "center": {"H": [], "V": []}
+        "up": {"H": [], "V": []},
+        "down": {"H": [], "V": []},
+        "center": {"H": [], "V": []}    
     }
-
 
     # Clear the detection queue
     eog_reader.out_queue.clear()
 
-    # Instructions for calibration
-    window.fill(BG_COLOR)
-    instruction_surf = font.render("Calibration: Press SPACEBAR to begin.", True, BLACK)
-    window.blit(instruction_surf, (WIDTH // 2 - instruction_surf.get_width() // 2, HEIGHT // 2))
-    pygame.display.flip()
-
-    # Wait for SPACEBAR to start calibration
-    if not wait_for_spacebar(window, font, "Press SPACEBAR to begin calibration..."):
-        return 95, 50, 0
-
-    # Step 1: Record baseline at center FIRST (before any movements)
-    window.fill(BG_COLOR)
-    pygame.draw.circle(window, BLUE, center_pos, DOT_RADIUS_ACTIVE)
-    instruction = "Look at the CENTER (baseline). Hold your gaze steady."
-    surf = font.render(instruction, True, BLACK)
-    window.blit(surf, (10, 50))
-    pygame.display.flip()
-
-    # Record baseline for 5 seconds (no movement)
-    start_time = time.time()
-    baseline_H = []
-    baseline_V = []
-    print("Recording baseline for 5 seconds...")
-    while time.time() - start_time < 5.0:
-        sample, _ = eog_reader.inlet.pull_sample(timeout=0.01)
-        if sample is not None:
-            ch1 = sample[0]
-            ch2 = sample[1]
-            ch3 = sample[2]
-            ch8 = sample[7]
-            H = ch1 - ch3
-            V = ch8 - ch2
-            baseline_H.append(H)
-            baseline_V.append(V)
-        pygame.event.pump()
-        clock.tick(60)
-
-    # Calculate center baseline from this clean baseline recording
-    if baseline_H and baseline_V:
-        center_baseline_H = np.mean(baseline_H)
-        center_baseline_V = np.mean(baseline_V)
-    else:
-        print("Warning: No baseline samples received. Using default values.")
-        center_baseline_H = 0
-        center_baseline_V = 0
-
-    print(f"Center baseline H: {center_baseline_H:.1f}, V: {center_baseline_V:.1f}")
-    center_baseline = (center_baseline_H + center_baseline_V) / 2
-    print(f"center baseline: {center_baseline}")
+    # ... [rest of your initialization code] ...
 
     # Step 2: Record raw signals for each directional target
     for i, (target_name, pos) in enumerate(calibration_sequence):
-        target_key = target_name.lower()  # Convert to lowercase for dictionary access
+        target_key = target_name.lower()
 
-        # Make sure the target_key exists in our calibration_data
         if target_key not in calibration_data:
-            print(f"Warning: Unknown target direction '{target_name}'. Skipping.")
-            continue
+            continue  # Skip center positions for calibration
 
-        # Add a rest step every 5 targets
-        if i > 0 and i % 8 == 0:
-            window.fill(BG_COLOR)
-            rest_surf = font.render("Rest your eyes and blink if needed. Press SPACEBAR to continue.", True, BLACK)
-            window.blit(rest_surf, (WIDTH // 2 - rest_surf.get_width() // 2, HEIGHT // 2))
-            pygame.display.flip()
-            if not wait_for_spacebar(window, font):
-                return 95, 50, max(center_baseline_H, center_baseline_V)
+        # ... [rest of your target recording code] ...
 
-        # Show the target
-        window.fill(BG_COLOR)
-        for name, p in calibration_sequence:
-            pygame.draw.circle(window, RED, p, DOT_RADIUS_STATIC)
-        pygame.draw.circle(window, BLUE, pos, DOT_RADIUS_ACTIVE)
-        instruction = f"Looking at {target_name}..."
-        surf = font.render(instruction, True, BLACK)
-        window.blit(surf, (10, 50))
-        pygame.display.flip()
-
-        # Record EOG data for 3 seconds
-        start_time = time.time()
-        end_time = start_time + 3.0
-        target_H = []
-        target_V = []
-        print(f"Recording signals for {target_name}...")
-
-        while time.time() < end_time:
-            sample, _ = eog_reader.inlet.pull_sample(timeout=0.01)
-            if sample is not None:
-                ch1 = sample[0]
-                ch2 = sample[1]
-                ch3 = sample[2]
-                ch8 = sample[7]
-                H = ch1 - ch3
-                V = ch8 - ch2
-                target_H.append(H)
-                target_V.append(V)
-            pygame.event.pump()
-            clock.tick(60)
-
-        # Store the raw signals for this target
-        if target_H and target_V:
-            calibration_data[target_key]["H"].extend(target_H)
-            calibration_data[target_key]["V"].extend(target_V)
-            print(f"Recorded {len(target_H)} samples for {target_name}")
-        else:
-            print(f"Warning: No samples recorded for {target_name}")
-
-    # Step 3: Calculate thresholds based on the top 10% of signals for each direction
+    # Step 3: Calculate thresholds based on the top 10% of signals
     def calculate_threshold(direction, channel, default):
         if not calibration_data[direction][channel]:
-            print(f"Warning: No {channel} signals recorded for {direction}. Using default threshold.")
+            print(f"Warning: No {channel} signals for {direction}. Using default.")
             return default
 
-        # Get all signals for this direction and channel
         signals = np.array(calibration_data[direction][channel])
 
-        # Apply bandpass filtering to remove noise
+        # Apply bandpass filtering
         try:
             filtered = bandpass_filter(signals, LOWCUT, HIGHCUT, FS, FILTER_ORDER)
         except Exception as e:
-            print(f"Error filtering signals for {direction} {channel}: {e}")
+            print(f"Error filtering: {e}")
             return default
 
-        # Find absolute values to detect peaks regardless of direction
+        # Use absolute values and find top 10% peaks
         abs_signals = np.abs(filtered)
-
-        # Sort signals by amplitude (highest first)
         sorted_signals = np.sort(abs_signals)[::-1]
-
-        # Take the top 10% of signals
         top_count = max(1, int(len(sorted_signals) * 0.1))
         top_signals = sorted_signals[:top_count]
 
-        # Calculate threshold as 0.75 times the mean of top signals
+        # Calculate threshold as 0.75 * mean of top signals
         threshold = np.mean(top_signals) * 0.75
-
         return max(default, threshold)
 
-    # Calculate horizontal threshold (based on H channel for left/right)
-    try:
-        H_THRESH = max(
-            calculate_threshold("left", "H", 95),
-            calculate_threshold("right", "H", 95)
-        )
-    except Exception as e:
-        print(f"Error calculating horizontal threshold: {e}")
-        H_THRESH = 95
+    # Calculate thresholds
+    H_THRESH = max(
+        calculate_threshold("left", "H", 95),
+        calculate_threshold("right", "H", 95)
+    )
+    V_THRESH = max(
+        calculate_threshold("up", "V", 50),
+        calculate_threshold("down", "V", 50)
+    )
 
-    # Calculate vertical threshold (based on V channel for up/down)
-    try:
-        V_THRESH = max(
-            calculate_threshold("up", "V", 50),
-            calculate_threshold("down", "V", 50)
-        )
-    except Exception as e:
-        print(f"Error calculating vertical threshold: {e}")
-        V_THRESH = 50
+    return H_THRESH, V_THRESH 
 
-    # Ensure minimum threshold values
-    H_THRESH = max(H_THRESH, 40)
-    V_THRESH = max(V_THRESH, 30)
-
-    print(f"Calculated thresholds based on top 10% of signals: H_THRESH={H_THRESH:.1f}, V_THRESH={V_THRESH:.1f}")
-    return H_THRESH, V_THRESH, center_baseline
 
 def wait_for_spacebar(window, font, message="rest your eyes and press SPACEBAR to continue when ready"):
     """
@@ -472,14 +355,14 @@ def main():
 
     center_pos = [WIDTH // 2, HEIGHT // 2]
     sequence = [
-        ("center", center_pos),  # Baseline - lowercase
+        ("center", center_pos), 
         ("left", [int(0.05 * WIDTH), HEIGHT // 2]),
-        ("center", center_pos),  # Return to baseline
+        ("center", center_pos), 
         ("right", [int(0.95 * WIDTH), HEIGHT // 2]),
-        ("center", center_pos),  # Return to baseline
-        ("up", [WIDTH // 2, int(0.05 * HEIGHT)]),  # Note: lowercase 'up'
-        ("center", center_pos),  # Return to baseline
-        ("down", [WIDTH // 2, int(0.95 * HEIGHT)]),  # Note: lowercase 'down'
+        ("center", center_pos),  
+        ("up", [WIDTH // 2, int(0.05 * HEIGHT)]),  
+        ("center", center_pos), 
+        ("down", [WIDTH // 2, int(0.95 * HEIGHT)]),  
         # Second half without returning to center
         ("center", center_pos), # Return to center
         ("left", [int(0.05 * WIDTH), HEIGHT // 2]),
@@ -491,37 +374,37 @@ def main():
         ("up", [WIDTH // 2, int(0.05 * HEIGHT)]),
     ]
     calibration_sequence = [
-    ("center", center_pos),  # Baseline - lowercase
+    ("center", center_pos),  
     ("left", [int(0.05 * WIDTH), HEIGHT // 2]),
-    ("center", center_pos),  # Return to baseline
+    ("center", center_pos),  
     ("right", [int(0.95 * WIDTH), HEIGHT // 2]),
-    ("center", center_pos),  # Return to baseline
+    ("center", center_pos),  
     ("up", [WIDTH // 2, int(0.05 * HEIGHT)]),  # Note: lowercase 'up'
-    ("center", center_pos),  # Return to baseline
+    ("center", center_pos),  
     ("down", [WIDTH // 2, int(0.95 * HEIGHT)]),  # Note: lowercase 'down'
-    ("center", center_pos),  # Baseline - lowercase
+    ("center", center_pos), 
     ("left", [int(0.05 * WIDTH), HEIGHT // 2]),
-    ("center", center_pos),  # Return to baseline
+    ("center", center_pos),  
     ("right", [int(0.95 * WIDTH), HEIGHT // 2]),
-    ("center", center_pos),  # Return to baseline
+    ("center", center_pos),  
     ("up", [WIDTH // 2, int(0.05 * HEIGHT)]),  # Note: lowercase 'up'
-    ("center", center_pos),  # Return to baseline
+    ("center", center_pos),  
     ("down", [WIDTH // 2, int(0.95 * HEIGHT)]),  # Note: lowercase 'down'
-    ("center", center_pos),  # Baseline - lowercase
+    ("center", center_pos),  
     ("left", [int(0.05 * WIDTH), HEIGHT // 2]),
-    ("center", center_pos),  # Return to baseline
+    ("center", center_pos),  
     ("right", [int(0.95 * WIDTH), HEIGHT // 2]),
-    ("center", center_pos),  # Return to baseline
+    ("center", center_pos), 
     ("up", [WIDTH // 2, int(0.05 * HEIGHT)]),  # Note: lowercase 'up'
-    ("center", center_pos),  # Return to baseline
+    ("center", center_pos),  
     ("down", [WIDTH // 2, int(0.95 * HEIGHT)]),  # Note: lowercase 'down'
-    ("center", center_pos),  # Baseline - lowercase
+    ("center", center_pos),  
     ("left", [int(0.05 * WIDTH), HEIGHT // 2]),
-    ("center", center_pos),  # Return to baseline
+    ("center", center_pos),  
     ("right", [int(0.95 * WIDTH), HEIGHT // 2]),
-    ("center", center_pos),  # Return to baseline
+    ("center", center_pos),  
     ("up", [WIDTH // 2, int(0.05 * HEIGHT)]),  # Note: lowercase 'up'
-    ("center", center_pos),  # Return to baseline
+    ("center", center_pos),  
     ("down", [WIDTH // 2, int(0.95 * HEIGHT)]),  # Note: lowercase 'down'
     
 ]
@@ -539,7 +422,7 @@ def main():
     eog.start()
 
     # --- Run calibration ---
-    H_THRESH, V_THRESH, center_baseline = run_calibration(eog, window, font, calibration_sequence)
+    H_THRESH, V_THRESH = run_calibration(eog, window, font, calibration_sequence)
     eog.H_THRESH = H_THRESH
     eog.V_THRESH = V_THRESH
     print(f"Calibration complete. H_THRESH: {H_THRESH}, V_THRESH: {V_THRESH}")
@@ -689,9 +572,7 @@ def main():
         writer.writerow({"target_name": "THRESHOLDS", "expected": f"H_THRESH: {calibrated_H_THRESH}",
                          "detected": f"V_THRESH: {calibrated_V_THRESH}", "confidence": "—",
                          "ts_detected": "—", "correct": "—"})
-        # baseline row
-        writer.writerow({"target_name": "BASELINE", "expected": f"Center Baseline: {center_baseline:.1f}",
-                        "detected": "-", "confidence": "—", "ts_detected": "—", "correct": "—"})
+        
     print(f"Saved results to {out_path}")
 
 if __name__ == "__main__":
