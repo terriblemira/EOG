@@ -48,7 +48,7 @@ LOWCUT = 0.4
 HIGHCUT = 30
 FILTER_ORDER = 4
 PEAK_DISTANCE = 75  # samples
-MERGE_WINDOW = 500  # samples
+MERGE_WINDOW = int(0.12 * FS)  # samples
 GLOBAL_COOLDOWN = 0.8  # seconds between ANY two accepted detections
 LSL_STREAM_NAME = 'Explore_8441_ExG'
 clock = pygame.time.Clock()
@@ -64,13 +64,13 @@ def butter_bandpass(lowcut, highcut, fs, order):
 
 def bandpass_filter(data, lowcut, highcut, fs, order):
     b, a = butter_bandpass(lowcut, highcut, fs, order)
-    return sig.filtfilt(b, a, data)
+    return sig.lfilter(b, a, data)
 
 def notch_filter(data, fs, freq=50, bandwidth=5):
     w0 = freq / (fs/2)  # normalized frequency
     Q = freq / bandwidth
     b, a = sig.iirnotch(w0, Q)
-    return sig.filtfilt(b, a, data)
+    return sig.lfilter(b, a, data)
 
 def run_calibration(eog_reader, window, font, calibration_sequence):
     # Data structure to store raw signals for each direction
@@ -240,6 +240,8 @@ def run_calibration(eog_reader, window, font, calibration_sequence):
     # Use the average of left/right and up/down as normalization factors
     H_norm = (left_norm + right_norm) / 2
     V_norm = (up_norm + down_norm) / 2
+    H_norm = max(H_norm, 1e-6)
+    V_norm = max(V_norm, 1e-6)
     norm_factors = {"H": H_norm, "V": V_norm}
     print(f"\nNormalization factors: H={H_norm:.2f}, V={V_norm:.2f}")
 
@@ -427,7 +429,7 @@ class EOGReader(threading.Thread):
                 except Exception as e:
                     print(f"Filter error: {e}")
                     continue
-                if len(H_corrected) > 0 and len(V_corrected) > 0:
+                #if len(H_corrected) > 0 and len(V_corrected) > 0:
                     print(f"Current signals - H: {np.mean(H_corrected):.2f}±{np.std(H_corrected):.2f} (max: {np.max(np.abs(H_corrected)):.2f}), "
                         f"V: {np.mean(V_corrected):.2f}±{np.std(V_corrected):.2f} (max: {np.max(np.abs(V_corrected)):.2f})")
                     print(f"Thresholds - left: {self.calibration_params['thresholds']['left']:.2f}, right: {self.calibration_params['thresholds']['right']:.2f}, "
@@ -605,7 +607,6 @@ def main():
     running_correct = 0
     running_total = 0
     latest_det_display = "None"
-    latest_det_conf = 0.0
     step_captured = False
     current_expected = expected_from_name(sequence[0][0])
     running = True
@@ -661,7 +662,6 @@ def main():
                 step_captured = False
                 current_expected = expected_from_name(sequence[step_index][0])
                 latest_det_display = "None"
-                latest_det_conf = 0.0
                 step_max_h = 0
                 step_min_h = 0
                 step_max_v = 0

@@ -91,65 +91,35 @@ def notch_filter(data, fs, freq=50, bandwidth=5):
 def detect_eye_movements(signal, timestamps, h_thresh, v_thresh, use_highest_peak=False):
     """
     Detects eye movements in EOG signals.
-    Args:
-        signal: np.array shape (N, 2) with columns [H, V]
-        timestamps: np.array shape (N,)
-        h_thresh: Horizontal threshold
-        v_thresh: Vertical threshold
-        use_highest_peak: If True, uses highest peak (for calibration).
-                          If False, uses first peak (for real-time detection)
-    Returns:
-        list of (timestamp, direction:str) where direction in {'left','right','up','down'}
+    Only returns movements where H or V exceeds thresholds.
+    Direction assignment based on sign:
+        Horizontal: H<0 → left, H>0 → right
+        Vertical:   V<0 → up,   V>0 → down
     """
     horizontal = signal[:, 0]
     vertical = signal[:, 1]
 
-    # Find peaks with appropriate parameters
-    h_pos, _ = sig.find_peaks(horizontal, distance=PEAK_DISTANCE, height=h_thresh)
-    h_neg, _ = sig.find_peaks(-horizontal, distance=PEAK_DISTANCE, height=h_thresh)
-    v_pos, _ = sig.find_peaks(vertical, distance=PEAK_DISTANCE, height=v_thresh)
-    v_neg, _ = sig.find_peaks(-vertical, distance=PEAK_DISTANCE, height=v_thresh)
-
-    # Create peak lists with indices, types, and amplitudes
-    h_peaks = [(i, 'pos', horizontal[i]) for i in h_pos] + [(i, 'neg', horizontal[i]) for i in h_neg]
-    v_peaks = [(i, 'pos', vertical[i]) for i in v_pos] + [(i, 'neg', vertical[i]) for i in v_neg]
-
     raw_movements = []
 
-    # Detect vertical movements
-    for i in range(len(v_peaks) - 1):
-        idx1, type1, amp1 = v_peaks[i]
-        idx2, type2, amp2 = v_peaks[i + 1]
-        if 0 < idx2 - idx1 < PEAK_DISTANCE:
-            # Check if the amplitude change is significant
-            if type1 == 'pos' and type2 == 'neg' and abs(amp1 - amp2) > v_thresh:
-                raw_movements.append((idx1, 'down', abs(amp1 - amp2)))
-            elif type1 == 'neg' and type2 == 'pos' and abs(amp1 - amp2) > v_thresh:
-                raw_movements.append((idx1, 'up', abs(amp1 - amp2)))
+    # Horizontal peaks above thresholds
+    for idx, val in enumerate(horizontal):
+        if val > h_thresh:
+            raw_movements.append((idx, 'right', val))
+        elif val < -h_thresh:
+            raw_movements.append((idx, 'left', val))
 
-    # Detect horizontal movements
-    for i in range(len(h_peaks) - 1):
-        idx1, type1, amp1 = h_peaks[i]
-        idx2, type2, amp2 = h_peaks[i + 1]
-        if 0 < idx2 - idx1 < PEAK_DISTANCE:
-            # Check if the amplitude change is significant
-            if type1 == 'pos' and type2 == 'neg' and abs(amp1 - amp2) > h_thresh:
-                raw_movements.append((idx1, 'left', abs(amp1 - amp2)))
-            elif type1 == 'neg' and type2 == 'pos' and abs(amp1 - amp2) > h_thresh:
-                raw_movements.append((idx1, 'right', abs(amp1 - amp2)))
+    # Vertical peaks above thresholds
+    for idx, val in enumerate(vertical):
+        if val > v_thresh:
+            raw_movements.append((idx, 'down', val))
+        elif val < -v_thresh:
+            raw_movements.append((idx, 'up', val))
 
     if not raw_movements:
         return []
 
-    # Sort and select peaks based on use case
-    if use_highest_peak:
-        # For calibration: sort by amplitude (highest first)
-        raw_movements.sort(key=lambda x: x[2], reverse=True)
-    else:
-        # For real-time detection: sort by time (earliest first)
-        raw_movements.sort(key=lambda x: x[0])
-
-    # Merge nearby movements
+    # Sort and merge nearby movements
+    raw_movements.sort(key=lambda x: x[0])
     filtered_movements = []
     i = 0
     while i < len(raw_movements):
@@ -158,25 +128,28 @@ def detect_eye_movements(signal, timestamps, h_thresh, v_thresh, use_highest_pea
         while j < len(raw_movements) and raw_movements[j][0] - raw_movements[i][0] <= MERGE_WINDOW:
             group.append(raw_movements[j])
             j += 1
-        # Select peak based on use case
-        if use_highest_peak:
-            # For calibration: use highest amplitude peak
-            peak = max(group, key=lambda x: x[2])
-        else:
-            # For real-time detection: use first peak
-            peak = group[0]
-        filtered_movements.append((timestamps[peak[0]], peak[1], peak[2]))
+        peak = max(group, key=lambda x: abs(x[2])) if use_highest_peak else group[0]
+        filtered_movements.append(
+            Detection(
+                ts=timestamps[peak[0]],
+                direction=peak[1],
+                confidence=abs(peak[2]),
+                h_value=signal[peak[0], 0],
+                v_value=signal[peak[0], 1]
+            )
+        )
         i = j
+
     return filtered_movements
 
 def run_calibration(eog_reader, window, font, calibration_sequence):
     # Data structure to store raw signals for each direction
     calibration_data = {
-        "left": {"H": [], "V": []},
-        "right": {"H": [], "V": []},
-        "up": {"H": [], "V": []},
-        "down": {"H": [], "V": []},
-        "center": {"H": [], "V": []}
+        "left": {"ch1": [], "ch2": [], "ch3": [], "ch8": []},
+        "right": {"ch1": [], "ch2": [], "ch3": [], "ch8": []},
+        "up": {"ch1": [], "ch2": [], "ch3": [], "ch8": []},
+        "down": {"ch1": [], "ch2": [], "ch3": [], "ch8": []},
+        "center": {"ch1": [], "ch2": [], "ch3": [], "ch8": []}
     }
 
     # Clear the detection queue
@@ -218,71 +191,65 @@ def run_calibration(eog_reader, window, font, calibration_sequence):
         # Record EOG data for 3 seconds
         start_time = time.time()
         end_time = start_time + 3.0
-        target_H = []
-        target_V = []
-
+        target_ch1, target_ch2, target_ch3, target_ch8 = [], [], [], []
         print(f"Recording {target_name} for 3 seconds...")
         sample_count = 0
         while time.time() < end_time:
             sample, _ = eog_reader.inlet.pull_sample(timeout=0.01)
             if sample is not None:
                 sample_count += 1
-                ch1 = sample[0]
-                ch2 = sample[1]
-                ch3 = sample[2]
-                ch8 = sample[7]
-                H = ch1 - ch3
-                V = ch8 - ch2
-                target_H.append(H)
-                target_V.append(V)
-
-                # Print sample values occasionally
-                if sample_count % 10 == 0:
-                    print(f"  Sample {sample_count}: H={H:.2f}, V={V:.2f}")
-
+                target_ch1.append(sample[0])
+                target_ch2.append(sample[1])
+                target_ch3.append(sample[2])
+                target_ch8.append(sample[7])
             pygame.event.pump()
             clock.tick(60)
-
-        print(f"Recorded {len(target_H)} samples for {target_name}")
-
-        # Store the raw signals for this target
-        if target_H and target_V:
-            calibration_data[target_key]["H"].extend(target_H)
-            calibration_data[target_key]["V"].extend(target_V)
+        print(f"Recorded {len(target_ch1)} samples for {target_name}")
+        # Store the raw channels for this target
+        if target_ch1 and target_ch2 and target_ch3 and target_ch8:
+            calibration_data[target_key]["ch1"].extend(target_ch1)
+            calibration_data[target_key]["ch2"].extend(target_ch2)
+            calibration_data[target_key]["ch3"].extend(target_ch3)
+            calibration_data[target_key]["ch8"].extend(target_ch8)
         else:
             print(f"WARNING: No samples collected for {target_name}!")
 
     # Verify we collected data
     for direction in calibration_data:
-        h_count = len(calibration_data[direction]["H"])
-        v_count = len(calibration_data[direction]["V"])
-        print(f"{direction}: {h_count} H samples, {v_count} V samples")
+        print(f"{direction}: {len(calibration_data[direction]['ch1'])} samples")
 
-    # Step 3: Calculate thresholds using only relevant directions
+    # Step 3: Calculate thresholds using filtered signals
     def calculate_threshold(direction, channel, default):
-        if not calibration_data[direction][channel]:
-            print(f"Warning: No {channel} signals for {direction}. Using default.")
+        if not calibration_data[direction]["ch1"] or not calibration_data[direction]["ch2"] or not calibration_data[direction]["ch3"] or not calibration_data[direction]["ch8"]:
+            print(f"Warning: No signals for {direction}. Using default.")
             return default
-
-        signals = np.array(calibration_data[direction][channel])
-
-        # Apply bandpass filtering
-        try:
-            filtered = bandpass_filter(signals, LOWCUT, HIGHCUT, FS, FILTER_ORDER)
-        except Exception as e:
-            print(f"Error filtering {direction} {channel}: {e}")
-            return default
-
+        # Get raw channels
+        ch1 = np.array(calibration_data[direction]["ch1"])
+        ch2 = np.array(calibration_data[direction]["ch2"])
+        ch3 = np.array(calibration_data[direction]["ch3"])
+        ch8 = np.array(calibration_data[direction]["ch8"])
+        # Apply filters
+        ch1 = notch_filter(ch1, FS)
+        ch2 = notch_filter(ch2, FS)
+        ch3 = notch_filter(ch3, FS)
+        ch8 = notch_filter(ch8, FS)
+        ch1 = bandpass_filter(ch1, LOWCUT, HIGHCUT, FS, FILTER_ORDER)
+        ch2 = bandpass_filter(ch2, LOWCUT, HIGHCUT, FS, FILTER_ORDER)
+        ch3 = bandpass_filter(ch3, LOWCUT, HIGHCUT, FS, FILTER_ORDER)
+        ch8 = bandpass_filter(ch8, LOWCUT, HIGHCUT, FS, FILTER_ORDER)
+        # Compute H or V
+        if channel == "H":
+            signals = ch1 - ch3
+        else:  # V
+            signals = ch8 - ch2
         # Use absolute values and find top 10% peaks
-        abs_signals = np.abs(filtered)
+        abs_signals = np.abs(signals)
         if len(abs_signals) == 0:
             print(f"No signals after filtering for {direction} {channel}")
             return default
-
         sorted_signals = np.sort(abs_signals)[::-1]
         top_count = max(1, int(len(sorted_signals) * 0.1))
         top_signals = sorted_signals[:top_count]
-
         # Calculate threshold as 0.75 * mean of top signals
         threshold = np.mean(top_signals) * 0.75
         print(f"{direction} {channel} threshold: {threshold:.2f} (top mean: {np.mean(top_signals):.2f})")
@@ -294,7 +261,7 @@ def run_calibration(eog_reader, window, font, calibration_sequence):
         left_h_thresh = calculate_threshold("left", "H", 95)
         right_h_thresh = calculate_threshold("right", "H", 95)
         H_THRESH = min(left_h_thresh, right_h_thresh)
-        print(f"H_THRESH = max({left_h_thresh:.2f}, {right_h_thresh:.2f}) = {H_THRESH:.2f}")
+        print(f"H_THRESH = {H_THRESH:.2f}")
     except Exception as e:
         print(f"Error calculating H threshold: {e}")
         H_THRESH = 95
@@ -305,52 +272,79 @@ def run_calibration(eog_reader, window, font, calibration_sequence):
         up_v_thresh = calculate_threshold("up", "V", 50)
         down_v_thresh = calculate_threshold("down", "V", 50)
         V_THRESH = min(up_v_thresh, down_v_thresh)
-        print(f"V_THRESH = max({up_v_thresh:.2f}, {down_v_thresh:.2f}) = {V_THRESH:.2f}")
+        print(f"V_THRESH = {V_THRESH:.2f}")
     except Exception as e:
         print(f"Error calculating V threshold: {e}")
         V_THRESH = 50
 
-    # Add visualization of the signals used for threshold calculation
+    # Plot filtered signals with thresholds
     try:
         import matplotlib.pyplot as plt
         import os
         from datetime import datetime
-
         # Create directory for plots if it doesn't exist
         plot_dir = "calibration_plots"
         os.makedirs(plot_dir, exist_ok=True)
-
         # Create a timestamp for the filename
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
-        # Plot horizontal signals for left/right
-        plt.figure(figsize=(12, 8))
+        # Filter raw channels for left/right and compute H
+        ch1_left = np.array(calibration_data["left"]["ch1"])
+        ch3_left = np.array(calibration_data["left"]["ch3"])
+        ch1_left = notch_filter(ch1_left, FS)
+        ch3_left = notch_filter(ch3_left, FS)
+        ch1_left = bandpass_filter(ch1_left, LOWCUT, HIGHCUT, FS, FILTER_ORDER)
+        ch3_left = bandpass_filter(ch3_left, LOWCUT, HIGHCUT, FS, FILTER_ORDER)
+        H_left = ch1_left - ch3_left
 
+        ch1_right = np.array(calibration_data["right"]["ch1"])
+        ch3_right = np.array(calibration_data["right"]["ch3"])
+        ch1_right = notch_filter(ch1_right, FS)
+        ch3_right = notch_filter(ch3_right, FS)
+        ch1_right = bandpass_filter(ch1_right, LOWCUT, HIGHCUT, FS, FILTER_ORDER)
+        ch3_right = bandpass_filter(ch3_right, LOWCUT, HIGHCUT, FS, FILTER_ORDER)
+        H_right = ch1_right - ch3_right
+
+        # Filter raw channels for up/down and compute V
+        ch8_up = np.array(calibration_data["up"]["ch8"])
+        ch2_up = np.array(calibration_data["up"]["ch2"])
+        ch8_up = notch_filter(ch8_up, FS)
+        ch2_up = notch_filter(ch2_up, FS)
+        ch8_up = bandpass_filter(ch8_up, LOWCUT, HIGHCUT, FS, FILTER_ORDER)
+        ch2_up = bandpass_filter(ch2_up, LOWCUT, HIGHCUT, FS, FILTER_ORDER)
+        V_up = ch8_up - ch2_up
+
+        ch8_down = np.array(calibration_data["down"]["ch8"])
+        ch2_down = np.array(calibration_data["down"]["ch2"])
+        ch8_down = notch_filter(ch8_down, FS)
+        ch2_down = notch_filter(ch2_down, FS)
+        ch8_down = bandpass_filter(ch8_down, LOWCUT, HIGHCUT, FS, FILTER_ORDER)
+        ch2_down = bandpass_filter(ch2_down, LOWCUT, HIGHCUT, FS, FILTER_ORDER)
+        V_down = ch8_down - ch2_down
+
+        # Plot
+        plt.figure(figsize=(12, 8))
         # Horizontal signals
         plt.subplot(2, 1, 1)
-        plt.plot(calibration_data["left"]["H"][:500], label="Left H")
-        plt.plot(calibration_data["right"]["H"][:500], label="Right H")
+        plt.plot(H_left[:500], label="Left H (filtered)")
+        plt.plot(H_right[:500], label="Right H (filtered)")
         plt.axhline(y=H_THRESH, color='r', linestyle='--', label=f'H Threshold={H_THRESH:.2f}')
         plt.axhline(y=-H_THRESH, color='r', linestyle='--')
-        plt.title("Horizontal Signals (First 500 Samples)")
+        plt.title("Filtered Horizontal Signals (First 500 Samples)")
         plt.legend()
-
         # Vertical signals
         plt.subplot(2, 1, 2)
-        plt.plot(calibration_data["up"]["V"][:500], label="Up V")
-        plt.plot(calibration_data["down"]["V"][:500], label="Down V")
+        plt.plot(V_up[:500], label="Up V (filtered)")
+        plt.plot(V_down[:500], label="Down V (filtered)")
         plt.axhline(y=V_THRESH, color='g', linestyle='--', label=f'V Threshold={V_THRESH:.2f}')
         plt.axhline(y=-V_THRESH, color='g', linestyle='--')
-        plt.title("Vertical Signals (First 500 Samples)")
+        plt.title("Filtered Vertical Signals (First 500 Samples)")
         plt.legend()
-
         plt.tight_layout()
-
         # Save the plot
         plot_path = os.path.join(plot_dir, f"calibration_signals_{timestamp}.png")
         plt.savefig(plot_path, dpi=300, bbox_inches='tight')
         print(f"Saved calibration plot to {plot_path}")
-
         # Show the plot briefly
         plt.show(block=False)
         plt.pause(2)
@@ -411,6 +405,10 @@ class EOGReader(threading.Thread):
         self.inlet = StreamInlet(streams[0])
         print("Connected to stream.")
         self.start_time = time.time()
+        self.latest_H = np.array([])
+        self.latest_V = np.array([])
+        self.latest_times = np.array([])
+
 
     def run(self):
         DETECT_PERIOD = 0.1  # seconds between running detection on the buffer
@@ -431,62 +429,65 @@ class EOGReader(threading.Thread):
                 ch2 = np.array(self.channel_buffers[1])
                 ch3 = np.array(self.channel_buffers[2])
                 ch8 = np.array(self.channel_buffers[7])
-
-                # Calculate raw H and V
-                H = ch1 - ch3
-                V= ch8 -  ch2
                 
-                # applying notch filter for electricity net
-                H = notch_filter(ch1 - ch3, FS)
-                V = notch_filter(ch8 - ch2, FS)
+                # Apply notch filter to raw channels
+                ch1 = notch_filter(ch1, FS)
+                ch2 = notch_filter(ch2, FS)
+                ch3 = notch_filter(ch3, FS)
+                ch8 = notch_filter(ch8, FS)
 
+                # Apply bandpass filter to raw channels
+                ch1 = bandpass_filter(ch1, LOWCUT, HIGHCUT, FS, FILTER_ORDER)
+                ch2 = bandpass_filter(ch2, LOWCUT, HIGHCUT, FS, FILTER_ORDER)
+                ch3 = bandpass_filter(ch3, LOWCUT, HIGHCUT, FS, FILTER_ORDER)
+                ch8 = bandpass_filter(ch8, LOWCUT, HIGHCUT, FS, FILTER_ORDER)
+
+                # Calculate H and V from filtered channels
+                H = ch1 - ch3
+                V = ch8 - ch2
+
+                
                 # Apply filters
                 try:
-                    Hf = bandpass_filter(H, LOWCUT, HIGHCUT, FS, FILTER_ORDER)
-                    Vf = bandpass_filter(V, LOWCUT, HIGHCUT, FS, FILTER_ORDER)
+                    self.latest_H = H
+                    self.latest_V = V
+                    self.latest_times = times
                 except Exception as e:
                     print(f"Filter error: {e}")
                     continue
 
-                sig_array = np.stack((Hf, Vf), axis=-1)
+                sig_array = np.stack((H, V), axis=-1)
 
-                if len(Hf) > 0 and len(Vf) > 0:
-                    print(f"Current signals - H: {np.mean(Hf):.2f}±{np.std(Hf):.2f} (max: {np.max(np.abs(Hf)):.2f}), "
-                      f"V: {np.mean(Vf):.2f}±{np.std(Vf):.2f} (max: {np.max(np.abs(Vf)):.2f})")
+                if len(H) > 0 and len(V) > 0:
+                    print(f"Current signals - H: {np.mean(H):.2f}±{np.std(H):.2f} (max: {np.max(np.abs(H)):.2f}), "
+                      f"V: {np.mean(V):.2f}±{np.std(V):.2f} (max: {np.max(np.abs(V)):.2f})")
                     print(f"Thresholds - H: {self.H_THRESH:.2f}, V: {self.V_THRESH:.2f}")
 
                     # Check if signals are crossing thresholds
-                    h_crossed = np.max(np.abs(Hf)) > self.H_THRESH
-                    v_crossed = np.max(np.abs(Vf)) > self.V_THRESH
+                    h_crossed = np.max(np.abs(H)) > self.H_THRESH
+                    v_crossed = np.max(np.abs(V)) > self.V_THRESH
                     print(f"Thresholds crossed - H: {h_crossed}, V: {v_crossed}")
 
                 # Check if we have significant signals in either direction
-                h_has_peaks = np.max(np.abs(Hf)) > self.H_THRESH
-                v_has_peaks = np.max(np.abs(Vf)) > self.V_THRESH
+                h_max = np.max(np.abs(H))
+                v_max = np.max(np.abs(V))
 
-                if h_has_peaks or v_has_peaks:
-                    movements = detect_eye_movements(sig_array, times, self.H_THRESH, self.V_THRESH, use_highest_peak=False)
+                if h_max > self.H_THRESH or v_max > self.V_THRESH:
+                    sig_array = np.stack((H, V), axis=-1)
+                    movements = detect_eye_movements(sig_array, times, self.H_THRESH, self.V_THRESH)
+
                     if movements:
-                        latest_time, direction, confidence = movements[-1]
-                        idx = np.searchsorted(times, latest_time)
+                        det = movements[-1]  # take last movement
+
+                        idx = np.searchsorted(times, det.ts)
                         idx = np.clip(idx, 0, len(times)-1)
 
-                        # Get raw H and V values at detection time
-                        h_val = Hf[idx] if idx < len(Hf) else 0
-                        v_val = Vf[idx] if idx < len(Vf) else 0
+                        # Update h/v values with filtered samples
+                        det.h_value = H[idx] if idx < len(H) else 0
+                        det.v_value = V[idx] if idx < len(V) else 0
 
-                        print(f"Detected {direction} with confidence {confidence:.2f}")
-                        print(f"Signal values: H={h_val:.2f}, V={v_val:.2f}")
-                        print(f"Thresholds: H={self.H_THRESH:.2f}, V={self.V_THRESH:.2f}")
-
-                        if confidence >= MIN_CONFIDENCE and (now - self.last_any_movement_time) >= GLOBAL_COOLDOWN:
-                            det = Detection(
-                                ts=latest_time,
-                                direction=direction,
-                                confidence=float(confidence),
-                                h_value=float(h_val),
-                                v_value=float(v_val)
-                            )
+                        # Push only if confidence above MIN_CONFIDENCE
+                        if det.confidence >= MIN_CONFIDENCE and (now - self.last_any_movement_time) >= GLOBAL_COOLDOWN:
                             self._push(det)
                             self.last_any_movement_time = now
 
@@ -617,16 +618,11 @@ def main():
 
             now = time.time()
 
-            # Track max H/V values during the step
-            if len(eog.channel_buffers[0]) > 0 and len(eog.channel_buffers[7]) > 0:
-                current_ch1 = np.mean(eog.channel_buffers[0])
-                current_ch3 = np.mean(eog.channel_buffers[2])
-                current_ch8 = np.mean(eog.channel_buffers[7])
-                current_ch2 = np.mean(eog.channel_buffers[1])
-                h_val = current_ch1 - current_ch3
-                v_val = current_ch8 - current_ch2
-                step_max_h = max(step_max_h, abs(h_val))
-                step_max_v = max(step_max_v, abs(v_val))
+            # Track max H/V values during the step using filtered signals
+            if len(eog.latest_H) > 0 and len(eog.latest_V) > 0:
+                step_max_h = max(step_max_h, np.max(np.abs(eog.latest_H)))
+                step_max_v = max(step_max_v, np.max(np.abs(eog.latest_V)))
+
 
             # ------------- step / movement -----------
             if (now - step_start) >= STEP_DURATION:
@@ -651,11 +647,6 @@ def main():
                         "h_value": 0,
                         "v_value": 0
                     })
-
-                    # Print debug info
-                    print(f"Step {step_index}: Max H={step_max_h:.2f}, Max V={step_max_v:.2f}")
-                    print(f"Thresholds: H={eog.H_THRESH:.2f}, V={eog.V_THRESH:.2f}")
-                    print(f"Crossed thresholds: H={crossed_h_thresh}, V={crossed_v_thresh}")
 
                 # advance step
                 step_index += 1
