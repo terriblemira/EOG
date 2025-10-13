@@ -331,7 +331,7 @@ def calculate_direction_thresholds(calibration_data, channel_norm_factors, basel
             # Calculate threshold
             abs_signals = np.abs(signals)
             if len(abs_signals) > 0:
-                threshold = np.percentile(abs_signals, 90)
+                threshold = np.percentile(abs_signals, 85)
                 min_threshold = 0.02 if not is_horizontal else 0.01
                 threshold = max(threshold, min_threshold)
                 thresholds[direction] = threshold

@@ -101,7 +101,7 @@ class EOGReader(threading.Thread):
             self.latest_times = times
 
             # Define velocity thresholds
-            H_VELOCITY_THRESHOLD = 0.1
+            H_VELOCITY_THRESHOLD = 0.05  # Lower threshold for horizontal movements
             V_VELOCITY_THRESHOLD = 0.05  # Lower threshold for vertical movements
 
             # Calculate velocity (derivative)

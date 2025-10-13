@@ -204,7 +204,7 @@ def main():
         ("center", center_pos),
         ("up", [WIDTH // 2, int(0.05 * HEIGHT)]),
         ("center", center_pos),
-        ("down", [WIDTH // 2, int(0.95 * HEIGHT)])
+        ("down", [WIDTH // 2, int(0.95 * HEIGHT)]),
     ]
 
     # Initialize EOG reader
