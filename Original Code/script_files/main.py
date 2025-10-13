@@ -5,9 +5,21 @@ import collections
 import numpy as np
 from config import *
 from eog_reader import EOGReader
-from calibration import calculate_normalized_baseline, calculate_channel_norm_factor, calculate_direction_thresholds, plot_calibration_signals
+from calibration import (
+    calculate_normalized_baseline,
+    calculate_channel_norm_factor,
+    calculate_direction_thresholds,
+    plot_calibration_signals,
+    calculate_alpha
+)
 from utils import wait_for_spacebar, expected_from_name, plot_detection_window, save_results
-from signal_processing_wavelet import process_signal
+# Create a shared, date-stamped results folder
+from datetime import datetime
+import os
+
+RESULTS_DIR = os.path.join("results", datetime.now().strftime("%Y%m%d_%H%M%S"))
+os.makedirs(RESULTS_DIR, exist_ok=True)
+
 
 def run_calibration(eog_reader, window, font, calibration_sequence, clock):
     """Run calibration to determine baselines and thresholds"""
@@ -28,7 +40,8 @@ def run_calibration(eog_reader, window, font, calibration_sequence, clock):
         return {
             "baselines": {"H": 0, "V": 0},
             "thresholds": {"left": 0.1, "right": 0.1, "up": 0.1, "down": 0.1},
-            "channel_norm_factors": {"ch1": 1, "ch2": 1, "ch3": 1, "ch8": 1}
+            "channel_norm_factors": {"ch1": 1, "ch2": 1, "ch3": 1, "ch8": 1},
+            "alpha": 0.0
         }
 
     # Record data for each target
@@ -61,28 +74,34 @@ def run_calibration(eog_reader, window, font, calibration_sequence, clock):
         # Record EOG data for 3 seconds
         start_time = time.time()
         end_time = start_time + 3.0
-        target_ch1, target_ch2, target_ch3, target_ch8 = [], [], [], []
+
+        # Temporary lists to collect samples for this step
+        step_samples_ch1 = []
+        step_samples_ch2 = []
+        step_samples_ch3 = []
+        step_samples_ch8 = []
+
         print(f"Recording {target_name} for 3 seconds...")
         sample_count = 0
         while time.time() < end_time:
-            sample, _ = eog_reader.inlet.pull_sample(timeout=0.01)
-            if sample is not None:
-                sample_count += 1
-                target_ch1.append(sample[0])
-                target_ch2.append(sample[1])
-                target_ch3.append(sample[2])
-                target_ch8.append(sample[7])
+            samples, timestamps = eog_reader.inlet.pull_chunk(timeout=0.1, max_samples=FS)
+            if samples:
+                samples = np.array(samples)
+                step_samples_ch1.extend(samples[:, 0])
+                step_samples_ch2.extend(samples[:, 1])
+                step_samples_ch3.extend(samples[:, 2])
+                step_samples_ch8.extend(samples[:, 7])
             pygame.event.pump()
-            clock.tick(60)
 
-        print(f"Recorded {len(target_ch1)} samples for {target_name}")
 
-        # Store the raw channels for this target
-        if target_ch1 and target_ch2 and target_ch3 and target_ch8:
-            calibration_data[target_key]["ch1"].extend(target_ch1)
-            calibration_data[target_key]["ch2"].extend(target_ch2)
-            calibration_data[target_key]["ch3"].extend(target_ch3)
-            calibration_data[target_key]["ch8"].extend(target_ch8)
+        print(f"Recorded {len(step_samples_ch1)} samples for {target_name}")
+
+        # Store the full arrays for this step
+        if step_samples_ch1 and step_samples_ch2 and step_samples_ch3 and step_samples_ch8:
+            calibration_data[target_key]["ch1"].append(np.array(step_samples_ch1))
+            calibration_data[target_key]["ch2"].append(np.array(step_samples_ch2))
+            calibration_data[target_key]["ch3"].append(np.array(step_samples_ch3))
+            calibration_data[target_key]["ch8"].append(np.array(step_samples_ch8))
         else:
             print(f"WARNING: No samples collected for {target_name}!")
 
@@ -103,8 +122,8 @@ def run_calibration(eog_reader, window, font, calibration_sequence, clock):
     V_baseline = calculate_normalized_baseline(calibration_data, channel_norm_factors, "V")
     baselines = {"H": H_baseline, "V": V_baseline}
 
-    # Calculate direction-specific thresholds
-    thresholds = calculate_direction_thresholds(calibration_data, channel_norm_factors, baselines)
+    # Calculate direction-specific thresholds and alpha
+    thresholds, alpha = calculate_direction_thresholds(calibration_data, channel_norm_factors, baselines)
 
     # Format thresholds for return
     formatted_thresholds = {
@@ -114,12 +133,13 @@ def run_calibration(eog_reader, window, font, calibration_sequence, clock):
         "down": thresholds.get("down", 0.05)
     }
 
-    plot_calibration_signals(calibration_data, channel_norm_factors, baselines, formatted_thresholds)
-    
+    plot_calibration_signals(calibration_data, channel_norm_factors, baselines, formatted_thresholds, alpha)
+
     return {
         "baselines": baselines,
         "thresholds": formatted_thresholds,
-        "channel_norm_factors": channel_norm_factors
+        "channel_norm_factors": channel_norm_factors,
+        "alpha": alpha
     }
 
 def main():
@@ -192,6 +212,7 @@ def main():
     print(f"Baselines: {calibration_params['baselines']}")
     print(f"Thresholds: {calibration_params['thresholds']}")
     print(f"Channel norm factors: {calibration_params['channel_norm_factors']}")
+    print(f"Alpha: {calibration_params['alpha']:.4f}")
 
     # Wait for user to start test
     if not wait_for_spacebar(window, font, "Calibration complete! Press SPACEBAR to start the test..."):
@@ -234,50 +255,82 @@ def main():
                 step_max_v = max(step_max_v, current_max_v)
                 step_min_v = min(step_min_v, current_min_v)
 
+            # Initialize detection variables at the start of each loop iteration
+            first_h_det = None
+            first_v_det = None
+
+            # Process all detections in the queue
+            while det_queue:
+                det = det_queue.popleft()
+                if det.is_horizontal and first_h_det is None:
+                    first_h_det = det
+                elif not det.is_horizontal and first_v_det is None:
+                    first_v_det = det
+
             # Handle step advancement
             if (now - step_start) >= STEP_DURATION:
-                # Plot the detection window for this step before advancing
+                # Determine if the step is correct
+                is_correct = False
+
+                # Check horizontal movement if expected
+                if current_expected["expected_h"] is not None and first_h_det is not None:
+                    if current_expected["expected_h"] == first_h_det.direction:
+                        is_correct = True
+                # Check vertical movement if expected
+                if current_expected["expected_v"] is not None and first_v_det is not None:
+                    if current_expected["expected_v"] == first_v_det.direction:
+                        is_correct = True
+                # Special case: if we got a detection but none was expected
+                if current_expected["expected_h"] is None and first_h_det is not None:
+                    is_correct = False
+                if current_expected["expected_v"] is None and first_v_det is not None:
+                    is_correct = False
+
+                # Log the trial
+                trial_data = {
+                    "step_index": step_index,
+                    "target_name": sequence[step_index][0],
+                    "expected_h": current_expected["expected_h"],
+                    "expected_v": current_expected["expected_v"],
+                    "detected_h": first_h_det.direction if first_h_det is not None else None,
+                    "detected_v": first_v_det.direction if first_v_det is not None else None,
+                    "ts_detected_h": float(first_h_det.ts) if first_h_det is not None else None,
+                    "ts_detected_v": float(first_v_det.ts) if first_v_det is not None else None,
+                    "correct": is_correct if (first_h_det is not None or first_v_det is not None) else
+                            (current_expected["expected_h"] is None and current_expected["expected_v"] is None),
+                    "h_value_h": first_h_det.h_value if first_h_det is not None else 0,
+                    "v_value_h": first_h_det.v_value if first_h_det is not None else 0,
+                    "h_value_v": first_v_det.h_value if first_v_det is not None else 0,
+                    "v_value_v": first_v_det.v_value if first_v_det is not None else 0,
+                    "h_velocity_h": first_h_det.h_velocity if first_h_det is not None else 0,
+                    "v_velocity_h": first_h_det.v_velocity if first_h_det is not None else 0,
+                    "h_velocity_v": first_v_det.h_velocity if first_v_det is not None else 0,
+                    "v_velocity_v": first_v_det.v_velocity if first_v_det is not None else 0,
+                    "h_value_max": step_max_h,
+                    "h_value_min": step_min_h,
+                    "v_value_max": step_max_v,
+                    "v_value_min": step_min_v,
+                    "h_threshold_left": calibration_params['thresholds']['left'],
+                    "h_threshold_right": calibration_params['thresholds']['right'],
+                    "v_threshold_up": calibration_params['thresholds']['up'],
+                    "v_threshold_down": calibration_params['thresholds']['down']
+                }
+                trials.append(trial_data)
+
+                # Plot the detection window for this step
                 plot_detection_window(
                     eog_reader=eog,
                     step_index=step_index,
                     target_name=sequence[step_index][0],
                     expected_direction=current_expected,
-                    detection=None,
+                    detection=first_h_det if first_h_det is not None else first_v_det,
                     calibration_params=calibration_params
                 )
 
-                # Finalize scoring for previous step if no detection captured
-                if not step_captured:
-                    is_correct = (current_expected["expected_h"] is None and current_expected["expected_v"] is None)
-                    running_total += 1
+                # Update counters
+                running_total += 1
+                if first_h_det is not None or first_v_det is not None:
                     running_correct += int(is_correct)
-                    trials.append({
-                        "step_index": step_index,
-                        "target_name": sequence[step_index][0],
-                        "expected_h": current_expected["expected_h"],
-                        "expected_v": current_expected["expected_v"],
-                        "detected_h": None,
-                        "detected_v": None,
-                        "ts_detected_h": None,
-                        "ts_detected_v": None,
-                        "correct": is_correct,
-                        "h_value_h": 0,
-                        "v_value_h": 0,
-                        "h_value_v": 0,
-                        "v_value_v": 0,
-                        "h_velocity_h": 0,
-                        "v_velocity_h": 0,
-                        "h_velocity_v": 0,
-                        "v_velocity_v": 0,
-                        "h_value_max": step_max_h,
-                        "h_value_min": step_min_h,
-                        "v_value_max": step_max_v,
-                        "v_value_min": step_min_v,
-                        "h_threshold_left": calibration_params['thresholds']['left'],
-                        "h_threshold_right": calibration_params['thresholds']['right'],
-                        "v_threshold_up": calibration_params['thresholds']['up'],
-                        "v_threshold_down": calibration_params['thresholds']['down']
-                    })
 
                 # Advance to next step
                 step_index += 1
@@ -285,102 +338,18 @@ def main():
                     running = False
                     break
 
+                # Reset for next step
                 dot_pos = sequence[step_index][1]
-                step_start = now
-                step_captured = False
-                current_expected = expected_from_name(sequence[step_index][0])
+                step_start = time.time()
                 step_max_h = -float('inf')
                 step_min_h = float('inf')
                 step_max_v = -float('inf')
                 step_min_v = float('inf')
+                current_expected = expected_from_name(sequence[step_index][0])
 
-            # Handle detection window
-            if not step_captured and (now - step_start) <= RESPONSE_WINDOW:
-                first_h_det = None
-                first_v_det = None
-
-                # Process all detections in the queue
+                # Clear the detection queue before the next step
                 while det_queue:
-                    det = det_queue.popleft()
-                    if det.is_horizontal and first_h_det is None:
-                        first_h_det = det
-                    elif not det.is_horizontal and first_v_det is None:
-                        first_v_det = det
-
-                # If we have at least one detection, mark step as captured
-                if first_h_det is not None or first_v_det is not None:
-                    step_captured = True
-                    running_total += 1
-
-                    # Plot the detection window with the detection marked
-                    if first_h_det is not None:
-                        plot_detection_window(
-                            eog_reader=eog,
-                            step_index=step_index,
-                            target_name=sequence[step_index][0],
-                            expected_direction=current_expected,
-                            detection=first_h_det,
-                            calibration_params=calibration_params
-                        )
-                    elif first_v_det is not None:
-                        plot_detection_window(
-                            eog_reader=eog,
-                            step_index=step_index,
-                            target_name=sequence[step_index][0],
-                            expected_direction=current_expected,
-                            detection=first_v_det,
-                            calibration_params=calibration_params
-                        )
-
-                    # Determine if the step is correct
-                    is_correct = False
-
-                    # Check horizontal movement if expected
-                    if current_expected["expected_h"] is not None and first_h_det is not None:
-                        if current_expected["expected_h"] == first_h_det.direction:
-                            is_correct = True
-
-                    # Check vertical movement if expected
-                    if current_expected["expected_v"] is not None and first_v_det is not None:
-                        if current_expected["expected_v"] == first_v_det.direction:
-                            is_correct = True
-
-                    # Special case: if we got a detection but none was expected
-                    if current_expected["expected_h"] is None and first_h_det is not None:
-                        is_correct = False
-                    if current_expected["expected_v"] is None and first_v_det is not None:
-                        is_correct = False
-
-                    running_correct += int(is_correct)
-
-                    # Log both detections to trials
-                    trials.append({
-                        "step_index": step_index,
-                        "target_name": sequence[step_index][0],
-                        "expected_h": current_expected["expected_h"],
-                        "expected_v": current_expected["expected_v"],
-                        "detected_h": first_h_det.direction if first_h_det is not None else None,
-                        "detected_v": first_v_det.direction if first_v_det is not None else None,
-                        "ts_detected_h": float(first_h_det.ts) if first_h_det is not None else None,
-                        "ts_detected_v": float(first_v_det.ts) if first_v_det is not None else None,
-                        "correct": is_correct,
-                        "h_value_h": first_h_det.h_value if first_h_det is not None else 0,
-                        "v_value_h": first_h_det.v_value if first_h_det is not None else 0,
-                        "h_value_v": first_v_det.h_value if first_v_det is not None else 0,
-                        "v_value_v": first_v_det.v_value if first_v_det is not None else 0,
-                        "h_velocity_h": first_h_det.h_velocity if first_h_det is not None else 0,
-                        "v_velocity_h": first_h_det.v_velocity if first_h_det is not None else 0,
-                        "h_velocity_v": first_v_det.h_velocity if first_v_det is not None else 0,
-                        "v_velocity_v": first_v_det.v_velocity if first_v_det is not None else 0,
-                        "h_value_max": step_max_h,
-                        "h_value_min": step_min_h,
-                        "v_value_max": step_max_v,
-                        "v_value_min": step_min_v,
-                        "h_threshold_left": calibration_params['thresholds']['left'],
-                        "h_threshold_right": calibration_params['thresholds']['right'],
-                        "v_threshold_up": calibration_params['thresholds']['up'],
-                        "v_threshold_down": calibration_params['thresholds']['down']
-                    })
+                    det_queue.popleft()
 
             # Draw the interface
             window.fill(BG_COLOR)
@@ -402,7 +371,6 @@ def main():
                 f"Max H: {step_max_h:.2f}, Max V: {step_max_v:.2f}",
                 f"Score: {running_correct}/{running_total} ({acc:.1f}%)"
             ]
-
             y = 10
             for line in overlay_lines:
                 surf = font.render(line, True, BLACK)
@@ -410,7 +378,8 @@ def main():
                 y += 32
 
             pygame.display.flip()
-            clock.tick(60)
+            clock.tick(FS)
+
 
     finally:
         eog.stop()

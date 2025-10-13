@@ -2,9 +2,16 @@ import pygame
 import os
 import csv
 import numpy as np
+import matplotlib
+matplotlib.use('Agg')   # <-- non-interactive backend safe for threads & headless envs
 import matplotlib.pyplot as plt
 from datetime import datetime
 from config import DEBUG_PLOTS, BG_COLOR, BLACK, PLOT_BUFFER_DURATION
+# Create a shared, date-stamped results folder
+from datetime import datetime
+import os
+from calibration import RESULTS_DIR
+csv_path = os.path.join(RESULTS_DIR, "eog_trial_results.csv")
 
 def wait_for_spacebar(window, font, message="Press SPACEBAR to continue"):
     """Display message and wait for SPACEBAR press"""
@@ -38,182 +45,186 @@ def expected_from_name(name: str):
     else:  # center
         return {"expected_h": None, "expected_v": None}
 
-def plot_detection_window(eog_reader, step_index, target_name, expected_direction, detection=None, calibration_params=None):
+def plot_detection_window(
+    eog_reader,
+    step_index=None,
+    target_name=None,
+    expected_direction=None,
+    detection=None,
+    calibration_params=None,
+    save_dir="detection_plots"
+):
     """
-    Plot and save the detection window for a specific step
-    This plots the full buffer window (5 seconds) for every step
+    Plot smooth detection signals from the EOGReader in a single figure with H and V subplots.
+    Supports per-step labeling for debugging (step index, target name, detection result).
     """
+    from datetime import datetime
+    import os
+    import numpy as np
+    import matplotlib.pyplot as plt
+    from scipy.interpolate import interp1d
+    from signal_processing_wavelet import process_signal
+    from config import DEBUG_PLOTS
+
     if not DEBUG_PLOTS:
         return
 
     try:
-        # Create directory for plots if it doesn't exist
-        plot_dir = "detection_plots"
-        os.makedirs(plot_dir, exist_ok=True)
-
-        # Get current timestamp for filename
+        os.makedirs(save_dir, exist_ok=True)
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
-        # Use the full buffers for plotting (5 seconds of data)
-        times = np.array(eog_reader.full_times)
-        H = np.array(eog_reader.full_H)
-        V = np.array(eog_reader.full_V)
+        # Filenames include step + target name for clarity
+        name_suffix = f"step{step_index}_{target_name or 'unknown'}_{timestamp}"
 
-        # Check if we have data
-        if len(times) == 0 or len(H) == 0 or len(V) == 0:
-            print(f"No signal data available for step {step_index+1} ({target_name})")
-            print(f"Times length: {len(times)}, H length: {len(H)}, V length: {len(V)}")
+        # Get rolling buffers
+        times = np.array(eog_reader.time_buffer)
+        if len(times) == 0:
+            print("No data in buffers to plot.")
             return
 
-        # Ensure all arrays have the same length
-        min_length = min(len(times), len(H), len(V))
-        if min_length == 0:
-            print(f"No valid data after length check for step {step_index+1} ({target_name})")
-            return
+        ch1 = np.array(eog_reader.channel_buffers[0])
+        ch2 = np.array(eog_reader.channel_buffers[1])
+        ch3 = np.array(eog_reader.channel_buffers[2])
+        ch8 = np.array(eog_reader.channel_buffers[7])
 
-        times = times[-min_length:]
-        H = H[-min_length:]
-        V = V[-min_length:]
+        # Use calibration or defaults
+        cal = calibration_params or eog_reader.calibration_params
+        norm = cal["channel_norm_factors"]
+        baselines = cal["baselines"]
+        thresholds = cal["thresholds"]
+        alpha = cal.get("alpha", 0.0)
 
-        # Create a figure
+        # Process & normalize channels
+        ch1 = process_signal(ch1, 250, "ch1") / norm["ch1"]
+        ch2 = process_signal(ch2, 250, "ch2") / norm["ch2"]
+        ch3 = process_signal(ch3, 250, "ch3") / norm["ch3"]
+        ch8 = process_signal(ch8, 250, "ch8") / norm["ch8"]
+
+        # Compute H and V
+        H = (ch1 - ch3) - baselines["H"]
+        V = (ch8 - ch2) - baselines["V"]
+        V_comp = V - alpha * H
+
+        # Interpolate for smoothness
+        fH = interp1d(times, H, kind="linear")
+        fV = interp1d(times, V_comp, kind="linear")
+        t_smooth = np.linspace(times[0], times[-1], len(times) * 5)
+        H_smooth = fH(t_smooth)
+        V_smooth = fV(t_smooth)
+
+        # Create a single figure with two subplots
         plt.figure(figsize=(12, 8))
 
         # Plot H signal
         plt.subplot(2, 1, 1)
-        plt.plot(times, H, label="H Signal", color='blue')
-        plt.axhline(y=calibration_params['thresholds']['right'], color='green', linestyle='--',
-                    label=f'Right Threshold={calibration_params["thresholds"]["right"]:.2f}')
-        plt.axhline(y=-calibration_params['thresholds']['left'], color='red', linestyle='--',
-                    label=f'Left Threshold={calibration_params["thresholds"]["left"]:.2f}')
-        plt.title(f"Horizontal Signal (Full {PLOT_BUFFER_DURATION}s Window)")
-        plt.xlabel("Time (s)")
-        plt.ylabel("Amplitude")
+        plt.plot(t_smooth, H_smooth, label="H signal")
+        plt.axhline(y=thresholds["left"], color="r", linestyle="--", label="Left thr.")
+        plt.axhline(y=-thresholds["right"], color="g", linestyle="--", label="Right thr.")
+        plt.title(f"H and V Signals (step {step_index} - {target_name})")
+        plt.ylabel("H Amplitude")
+        if expected_direction:
+            plt.text(0.02, 0.9, f"Expected H: {expected_direction.get('expected_h')}", transform=plt.gca().transAxes)
         plt.legend()
 
         # Plot V signal
         plt.subplot(2, 1, 2)
-        plt.plot(times, V, label="V Signal", color='purple')
-        plt.axhline(y=calibration_params['thresholds']['down'], color='green', linestyle='--',
-                    label=f'Down Threshold={calibration_params["thresholds"]["down"]:.2f}')
-        plt.axhline(y=-calibration_params['thresholds']['up'], color='red', linestyle='--',
-                    label=f'Up Threshold={calibration_params["thresholds"]["up"]:.2f}')
-        plt.title(f"Vertical Signal (Full {PLOT_BUFFER_DURATION}s Window)")
+        plt.plot(t_smooth, V_smooth, label="V signal (alpha-comp.)")
+        plt.axhline(y=thresholds["up"], color="r", linestyle="--", label="Up thr.")
+        plt.axhline(y=-thresholds["down"], color="g", linestyle="--", label="Down thr.")
         plt.xlabel("Time (s)")
-        plt.ylabel("Amplitude")
+        plt.ylabel("V Amplitude")
+        if expected_direction:
+            plt.text(0.02, 0.9, f"Expected V: {expected_direction.get('expected_v')}", transform=plt.gca().transAxes)
         plt.legend()
 
-        # Add detection markers if available
+        # Add detection marker if available
         if detection:
-            detection_time = detection.ts
-            if detection.is_horizontal:
+            det_time = detection.ts
+            if t_smooth[0] <= det_time <= t_smooth[-1]:
+                # Mark detection time on both subplots
                 plt.subplot(2, 1, 1)
-                plt.axvline(x=detection_time, color='black', linestyle=':',
-                           label=f'Detection: {detection.direction} at {detection_time:.2f}s')
+                plt.axvline(x=det_time, color='k', linestyle='--', label=f'Detection at {det_time:.2f}s')
                 plt.legend()
-            else:
+
                 plt.subplot(2, 1, 2)
-                plt.axvline(x=detection_time, color='black', linestyle=':',
-                           label=f'Detection: {detection.direction} at {detection_time:.2f}s')
+                plt.axvline(x=det_time, color='k', linestyle='--', label=f'Detection at {det_time:.2f}s')
                 plt.legend()
 
-        # Create metadata string
-        expected_dir = ""
-        if expected_direction["expected_h"]:
-            expected_dir = expected_direction["expected_h"]
-        elif expected_direction["expected_v"]:
-            expected_dir = expected_direction["expected_v"]
-        else:
-            expected_dir = "center (no movement)"
-
-        detection_status = "No detection" if not detection else f"Detected: {detection.direction}"
-
-        # Add comprehensive title
-        plt.suptitle(f"Step {step_index+1}: {target_name}\nExpected: {expected_dir} | {detection_status}")
-
-        # Adjust layout
         plt.tight_layout()
-
-        # Create filename based on target direction
-        direction_category = "center"
-        if expected_direction["expected_h"] == "left" or expected_direction["expected_h"] == "right":
-            direction_category = "horizontal"
-        elif expected_direction["expected_v"] == "up" or expected_direction["expected_v"] == "down":
-            direction_category = "vertical"
-
-        # Create subdirectory for direction category
-        direction_dir = os.path.join(plot_dir, direction_category)
-        os.makedirs(direction_dir, exist_ok=True)
-
-        # Save the plot with metadata in filename
-        plot_filename = f"step{step_index+1:03d}_{target_name}_{detection_status.replace(' ', '_')}_{timestamp}.png"
-        plot_path = os.path.join(direction_dir, plot_filename)
-        plt.savefig(plot_path, dpi=300, bbox_inches='tight')
-        print(f"Saved detection plot: {plot_path}")
-
-        # Close the figure
+        plt.savefig(os.path.join(save_dir, f"signals_{name_suffix}.png"), dpi=300)
         plt.close()
 
+        print(f"Detection plot saved for step {step_index} ({target_name})")
+
     except Exception as e:
-        print(f"Could not save detection plot for step {step_index+1}: {str(e)}")
+        print(f"Error plotting detection signals: {e}")
         import traceback
         traceback.print_exc()
 
 def save_results(trials, calibration_params, out_path="eog_trial_results.csv"):
     """Save trial results to CSV file"""
-    with open(out_path, "w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=[
-            "step_index", "target_name", "expected_h", "expected_v",
-            "detected_h", "detected_v", "ts_detected_h", "ts_detected_v",
-            "correct", "h_value_h", "v_value_h", "h_value_v", "v_value_v",
-            "h_velocity_h", "v_velocity_h", "h_velocity_v", "v_velocity_v",
-            "h_value_max", "h_value_min", "v_value_max", "v_value_min",
-            "h_threshold_left", "h_threshold_right", "v_threshold_up", "v_threshold_down"
-        ])
-        writer.writeheader()
-        for row in trials:
-            clean_row = {
-                "step_index": row.get("step_index", ""),
-                "target_name": row.get("target_name", ""),
-                "expected_h": row.get("expected_h", ""),
-                "expected_v": row.get("expected_v", ""),
-                "detected_h": row.get("detected_h", "") if row.get("detected_h") is not None else "",
-                "detected_v": row.get("detected_v", "") if row.get("detected_v") is not None else "",
-                "ts_detected_h": row.get("ts_detected_h", "") if row.get("ts_detected_h") is not None else "",
-                "ts_detected_v": row.get("ts_detected_v", "") if row.get("ts_detected_v") is not None else "",
-                "correct": row.get("correct", ""),
-                "h_value_h": row.get("h_value_h", 0),
-                "v_value_h": row.get("v_value_h", 0),
-                "h_value_v": row.get("h_value_v", 0),
-                "v_value_v": row.get("v_value_v", 0),
-                "h_velocity_h": row.get("h_velocity_h", 0),
-                "v_velocity_h": row.get("v_velocity_h", 0),
-                "h_velocity_v": row.get("h_velocity_v", 0),
-                "v_velocity_v": row.get("v_velocity_v", 0),
-                "h_value_max": row.get("h_value_max", 0),
-                "h_value_min": row.get("h_value_min", 0),
-                "v_value_max": row.get("v_value_max", 0),
-                "v_value_min": row.get("v_value_min", 0),
-                "h_threshold_left": row.get("h_threshold_left", 0),
-                "h_threshold_right": row.get("h_threshold_right", 0),
-                "v_threshold_up": row.get("v_threshold_up", 0),
-                "v_threshold_down": row.get("v_threshold_down", 0)
-            }
-            writer.writerow(clean_row)
+    try:
+        with open(out_path, "w", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=[
+                "step_index", "target_name", "expected_h", "expected_v",
+                "detected_h", "detected_v", "ts_detected_h", "ts_detected_v",
+                "correct", "h_value_h", "v_value_h", "h_value_v", "v_value_v",
+                "h_velocity_h", "v_velocity_h", "h_velocity_v", "v_velocity_v",
+                "h_value_max", "h_value_min", "v_value_max", "v_value_min",
+                "h_threshold_left", "h_threshold_right", "v_threshold_up", "v_threshold_down"
+            ])
+            writer.writeheader()
 
-        # Summary row
-        total = len(trials)
-        correct = sum(1 for r in trials if r["correct"])
-        writer.writerow({})
-        writer.writerow({
-            "target_name": "SUMMARY",
-            "expected_h": f"{correct}/{total} ({(correct/total*100.0 if total else 0.0):.1f}%)",
-        })
+            # Write each trial
+            for trial in trials:
+                # Create a clean row with proper handling of None values
+                clean_row = {
+                    "step_index": trial.get("step_index", ""),
+                    "target_name": trial.get("target_name", ""),
+                    "expected_h": trial.get("expected_h", ""),
+                    "expected_v": trial.get("expected_v", ""),
+                    "detected_h": trial.get("detected_h", ""),
+                    "detected_v": trial.get("detected_v", ""),
+                    "ts_detected_h": trial.get("ts_detected_h", ""),
+                    "ts_detected_v": trial.get("ts_detected_v", ""),
+                    "correct": trial.get("correct", ""),
+                    "h_value_h": trial.get("h_value_h", 0),
+                    "v_value_h": trial.get("v_value_h", 0),
+                    "h_value_v": trial.get("h_value_v", 0),
+                    "v_value_v": trial.get("v_value_v", 0),
+                    "h_velocity_h": trial.get("h_velocity_h", 0),
+                    "v_velocity_h": trial.get("v_velocity_h", 0),
+                    "h_velocity_v": trial.get("h_velocity_v", 0),
+                    "v_velocity_v": trial.get("v_velocity_v", 0),
+                    "h_value_max": trial.get("h_value_max", 0),
+                    "h_value_min": trial.get("h_value_min", 0),
+                    "v_value_max": trial.get("v_value_max", 0),
+                    "v_value_min": trial.get("v_value_min", 0),
+                    "h_threshold_left": trial.get("h_threshold_left", 0),
+                    "h_threshold_right": trial.get("h_threshold_right", 0),
+                    "v_threshold_up": trial.get("v_threshold_up", 0),
+                    "v_threshold_down": trial.get("v_threshold_down", 0)
+                }
+                writer.writerow(clean_row)
 
-        # Thresholds row
-        writer.writerow({
-            "target_name": "THRESHOLDS",
-            "expected_h": f"Left: {calibration_params['thresholds']['left']:.4f}, Right: {calibration_params['thresholds']['right']:.4f}",
-            "expected_v": f"Up: {calibration_params['thresholds']['up']:.4f}, Down: {calibration_params['thresholds']['down']:.4f}",
-        })
+            # Add summary rows
+            total = len(trials)
+            correct = sum(1 for r in trials if r.get("correct", False))
+            writer.writerow({})
+            writer.writerow({
+                "target_name": "SUMMARY",
+                "expected_h": f"{correct}/{total} ({(correct/total*100.0 if total else 0.0):.1f}%)",
+            })
 
-    print(f"Saved results to {out_path}")
+            # Add thresholds row
+            writer.writerow({
+                "target_name": "THRESHOLDS",
+                "expected_h": f"Left: {calibration_params['thresholds']['left']:.4f}, Right: {calibration_params['thresholds']['right']:.4f}",
+                "expected_v": f"Up: {calibration_params['thresholds']['up']:.4f}, Down: {calibration_params['thresholds']['down']:.4f}",
+            })
+
+        print(f"Successfully saved results to {out_path}")
+    except Exception as e:
+        print(f"Error saving results: {str(e)}")
+        import traceback
+        traceback.print_exc()

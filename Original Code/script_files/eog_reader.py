@@ -3,7 +3,7 @@ import collections
 import numpy as np
 import time
 from pylsl import StreamInlet, resolve_byprop
-from signal_processing_wavelet import process_signal
+from signal_processing_wavelet import process_eog_signals
 import config
 from dataclasses import dataclass
 
@@ -25,7 +25,8 @@ class EOGReader(threading.Thread):
         self.calibration_params = calibration_params or {
             "baselines": {"H": 0, "V": 0},
             "thresholds": {"left": 0.3, "right": 0.3, "up": 0.3, "down": 0.3},
-            "channel_norm_factors": {"ch1": 1, "ch2": 1, "ch3": 1, "ch8": 1}
+            "channel_norm_factors": {"ch1": 1, "ch2": 1, "ch3": 1, "ch8": 1},
+            "alpha": 0.0
         }
         self.running = True
 
@@ -91,33 +92,12 @@ class EOGReader(threading.Thread):
             ch3 = ch3[-min_length:]
             ch8 = ch8[-min_length:]
 
-            # Apply filters
-            ch1 = process_signal(ch1, config.FS, "ch1")
-            ch2 = process_signal(ch2, config.FS, "ch2")
-            ch3 = process_signal(ch3, config.FS, "ch3")
-            ch8 = process_signal(ch8, config.FS, "ch8")
-
-            # Normalize channels
-            ch1 = ch1 / self.calibration_params["channel_norm_factors"]["ch1"]
-            ch2 = ch2 / self.calibration_params["channel_norm_factors"]["ch2"]
-            ch3 = ch3 / self.calibration_params["channel_norm_factors"]["ch3"]
-            ch8 = ch8 / self.calibration_params["channel_norm_factors"]["ch8"]
-
-            # Calculate H and V for detection
-            H = ch1 - ch3
-            V = ch2 - ch8  # Reversed for vertical detection
-
-            # Apply baseline correction
-            H_corrected = H - self.calibration_params["baselines"]["H"]
-            if len(V) > 0:
-                v_baseline = np.mean(V[:50])  # Use the first 50 samples as baseline
-                V_corrected = V - v_baseline
-            else:
-                V_corrected = V - self.calibration_params["baselines"]["V"]
+            # process signals with alpha compensation
+            H_corrected, V_corrected, V_compensated = process_eog_signals(ch1, ch2, ch3, ch8, self.calibration_params)
 
             # Update latest signals for detection
             self.latest_H = H_corrected
-            self.latest_V = V_corrected
+            self.latest_V = V_compensated
             self.latest_times = times
 
             # Define velocity thresholds
@@ -126,7 +106,7 @@ class EOGReader(threading.Thread):
 
             # Calculate velocity (derivative)
             H_velocity = np.gradient(H_corrected)
-            V_velocity = np.gradient(V_corrected)
+            V_velocity = np.gradient(V_compensated)
 
             # Minimum movement threshold
             MIN_V_MOVEMENT = 0.5
@@ -135,7 +115,7 @@ class EOGReader(threading.Thread):
             now = time.time() - self.start_time
             for idx in range(1, len(H_corrected)):
                 h_val = H_corrected[idx]
-                v_val = V_corrected[idx]
+                v_val = V_compensated[idx]
                 h_vel = abs(H_velocity[idx])
                 v_vel = abs(V_velocity[idx])
 
@@ -167,11 +147,10 @@ class EOGReader(threading.Thread):
                         print(f"Pushed left detection to queue at {times[idx]:.2f}s")
 
                 # Check for vertical movements with velocity and minimum amplitude
-                if abs(v_val) > self.calibration_params["thresholds"]["up"] and v_vel > V_VELOCITY_THRESHOLD and abs(v_val) > MIN_V_MOVEMENT:
-                    direction = 'up' if v_val < 0 else 'down'
+                if v_val < -self.calibration_params["thresholds"]["up"] and v_vel > V_VELOCITY_THRESHOLD:
                     det = Detection(
                         ts=times[idx],
-                        direction=direction,
+                        direction='up',
                         is_horizontal=False,
                         h_value=h_val,
                         v_value=v_val,
@@ -179,7 +158,20 @@ class EOGReader(threading.Thread):
                         v_velocity=v_vel
                     )
                     if self._push(det):
-                        print(f"Pushed {direction} detection to queue at {times[idx]:.2f}s")
+                        print(f"Pushed up detection to queue at {times[idx]:.2f}s")
+                
+                elif v_val > self.calibration_params["thresholds"]["down"] and v_vel > V_VELOCITY_THRESHOLD:
+                    det = Detection(
+                        ts=times[idx],
+                        direction='down',
+                        is_horizontal=False,
+                        h_value=h_val,
+                        v_value=v_val,
+                        h_velocity=h_vel,
+                        v_velocity=v_vel
+                    )
+                    if self._push(det):
+                        print(f"Pushed down detection to queue at {times[idx]:.2f}s")
 
         except Exception as e:
             print(f"Error in detection processing: {str(e)}")
@@ -210,53 +202,41 @@ class EOGReader(threading.Thread):
 
             # Process full buffers for plotting periodically (every 0.2 seconds)
             current_time = time.time()
-            if (current_time - self.last_plot_update) >= 0.2 and len(self.time_buffer) > 0:
+            if (current_time - self.last_plot_update) >= 0.005 and len(self.time_buffer) > 0:
                 self.last_plot_update = current_time
 
-                # Process all channels for plotting
-                ch1 = np.array(self.channel_buffers[0])
-                ch2 = np.array(self.channel_buffers[1])
-                ch3 = np.array(self.channel_buffers[2])
-                ch8 = np.array(self.channel_buffers[7])
+                try:
+                    # Process all channels for plotting
+                    ch1 = np.array(self.channel_buffers[0])
+                    ch2 = np.array(self.channel_buffers[1])
+                    ch3 = np.array(self.channel_buffers[2])
+                    ch8 = np.array(self.channel_buffers[7])
 
-                # Ensure all arrays have the same length
-                min_length = min(len(self.time_buffer), len(ch1), len(ch2), len(ch3), len(ch8))
-                if min_length > 0:
-                    times = np.array(self.time_buffer)[-min_length:]
-                    ch1 = ch1[-min_length:]
-                    ch2 = ch2[-min_length:]
-                    ch3 = ch3[-min_length:]
-                    ch8 = ch8[-min_length:]
+                    # Ensure all arrays have the same length
+                    min_length = min(len(self.time_buffer), len(ch1), len(ch2), len(ch3), len(ch8))
+                    if min_length > 0:
+                        times = np.array(self.time_buffer)[-min_length:]
+                        ch1 = ch1[-min_length:]
+                        ch2 = ch2[-min_length:]
+                        ch3 = ch3[-min_length:]
+                        ch8 = ch8[-min_length:]
 
-                    # Apply filters
-                    ch1 = process_signal(ch1, config.FS, "ch1")
-                    ch2 = process_signal(ch2, config.FS, "ch2")
-                    ch3 = process_signal(ch3, config.FS, "ch3")
-                    ch8 = process_signal(ch8, config.FS, "ch8")
+                        # Process signals with alpha compensation
+                        H_corrected, V_corrected, V_compensated = process_eog_signals(
+                            ch1, ch2, ch3, ch8, self.calibration_params
+                        )
 
-                    # Normalize channels
-                    ch1 = ch1 / self.calibration_params["channel_norm_factors"]["ch1"]
-                    ch2 = ch2 / self.calibration_params["channel_norm_factors"]["ch2"]
-                    ch3 = ch3 / self.calibration_params["channel_norm_factors"]["ch3"]
-                    ch8 = ch8 / self.calibration_params["channel_norm_factors"]["ch8"]
-
-                    # Calculate H and V for plotting
-                    H = ch1 - ch3
-                    V = ch2 - ch8  # Reversed for vertical detection
-
-                    # Apply baseline correction
-                    H_corrected = H - self.calibration_params["baselines"]["H"]
-                    if len(V) > 0:
-                        v_baseline = np.mean(V[:50])  # Use the first 50 samples as baseline
-                        V_corrected = V - v_baseline
-                    else:
-                        V_corrected = V - self.calibration_params["baselines"]["V"]
-
-                    # Update full buffers for plotting
-                    self.full_H = H_corrected
-                    self.full_V = V_corrected
-                    self.full_times = times
-
+                        # Check if we got valid results
+                        if all(isinstance(arr, np.ndarray) and len(arr) > 0 for arr in [H_corrected, V_corrected, V_compensated]):
+                            # Update full buffers for plotting
+                            self.full_H = H_corrected
+                            self.full_V = V_compensated
+                            self.full_times = times
+                except Exception as e:
+                    print(f"Error in plotting processing: {str(e)}")
+                    import traceback
+                    traceback.print_exc()
+                    
             # Run detection every 0.1 seconds
             if (current_time - last_detection_check) >= DETECT_PERIOD and len(self.detect_time_buffer) >= config.DETECT_MAX_SAMPLES:
                 last_detection_check = current_time
