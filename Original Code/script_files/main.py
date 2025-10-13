@@ -196,6 +196,14 @@ def main():
         ("center", center_pos),
         ("up", [WIDTH // 2, int(0.05 * HEIGHT)]),
         ("center", center_pos),
+        ("down", [WIDTH // 2, int(0.95 * HEIGHT)]),
+        ("center", center_pos),
+        ("left", [int(0.05 * WIDTH), HEIGHT // 2]),
+        ("center", center_pos),
+        ("right", [int(0.95 * WIDTH), HEIGHT // 2]),
+        ("center", center_pos),
+        ("up", [WIDTH // 2, int(0.05 * HEIGHT)]),
+        ("center", center_pos),
         ("down", [WIDTH // 2, int(0.95 * HEIGHT)])
     ]
 
@@ -339,6 +347,7 @@ def main():
                     break
 
                 # Reset for next step
+                pygame.time.wait(int(500))  # brief pause between steps
                 dot_pos = sequence[step_index][1]
                 step_start = time.time()
                 step_max_h = -float('inf')

@@ -51,12 +51,11 @@ def plot_detection_window(
     target_name=None,
     expected_direction=None,
     detection=None,
-    calibration_params=None,
-    save_dir="detection_plots"
+    calibration_params=None
 ):
     """
     Plot smooth detection signals from the EOGReader in a single figure with H and V subplots.
-    Supports per-step labeling for debugging (step index, target name, detection result).
+    Saves plots to the same RESULTS_DIR as calibration.py.
     """
     from datetime import datetime
     import os
@@ -65,15 +64,17 @@ def plot_detection_window(
     from scipy.interpolate import interp1d
     from signal_processing_wavelet import process_signal
     from config import DEBUG_PLOTS
+    from calibration import RESULTS_DIR  # ✅ use shared folder
 
     if not DEBUG_PLOTS:
         return
 
     try:
+        # Create a "detection_plots" subfolder inside RESULTS_DIR
+        save_dir = os.path.join(RESULTS_DIR, "detection_plots")
         os.makedirs(save_dir, exist_ok=True)
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
-        # Filenames include step + target name for clarity
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         name_suffix = f"step{step_index}_{target_name or 'unknown'}_{timestamp}"
 
         # Get rolling buffers
@@ -94,28 +95,28 @@ def plot_detection_window(
         thresholds = cal["thresholds"]
         alpha = cal.get("alpha", 0.0)
 
-        # Process & normalize channels
+        # Process & normalize
         ch1 = process_signal(ch1, 250, "ch1") / norm["ch1"]
         ch2 = process_signal(ch2, 250, "ch2") / norm["ch2"]
         ch3 = process_signal(ch3, 250, "ch3") / norm["ch3"]
         ch8 = process_signal(ch8, 250, "ch8") / norm["ch8"]
 
-        # Compute H and V
+        # Compute H/V and compensation
         H = (ch1 - ch3) - baselines["H"]
         V = (ch8 - ch2) - baselines["V"]
         V_comp = V - alpha * H
 
-        # Interpolate for smoothness
+        # Smooth with interpolation
         fH = interp1d(times, H, kind="linear")
         fV = interp1d(times, V_comp, kind="linear")
         t_smooth = np.linspace(times[0], times[-1], len(times) * 5)
         H_smooth = fH(t_smooth)
         V_smooth = fV(t_smooth)
 
-        # Create a single figure with two subplots
+        # --- Plot ---
         plt.figure(figsize=(12, 8))
 
-        # Plot H signal
+        # H plot
         plt.subplot(2, 1, 1)
         plt.plot(t_smooth, H_smooth, label="H signal")
         plt.axhline(y=thresholds["left"], color="r", linestyle="--", label="Left thr.")
@@ -126,7 +127,7 @@ def plot_detection_window(
             plt.text(0.02, 0.9, f"Expected H: {expected_direction.get('expected_h')}", transform=plt.gca().transAxes)
         plt.legend()
 
-        # Plot V signal
+        # V plot
         plt.subplot(2, 1, 2)
         plt.plot(t_smooth, V_smooth, label="V signal (alpha-comp.)")
         plt.axhline(y=thresholds["up"], color="r", linestyle="--", label="Up thr.")
@@ -137,33 +138,44 @@ def plot_detection_window(
             plt.text(0.02, 0.9, f"Expected V: {expected_direction.get('expected_v')}", transform=plt.gca().transAxes)
         plt.legend()
 
-        # Add detection marker if available
+        # Mark detection event if available
         if detection:
             det_time = detection.ts
             if t_smooth[0] <= det_time <= t_smooth[-1]:
-                # Mark detection time on both subplots
                 plt.subplot(2, 1, 1)
                 plt.axvline(x=det_time, color='k', linestyle='--', label=f'Detection at {det_time:.2f}s')
                 plt.legend()
-
                 plt.subplot(2, 1, 2)
                 plt.axvline(x=det_time, color='k', linestyle='--', label=f'Detection at {det_time:.2f}s')
                 plt.legend()
 
         plt.tight_layout()
-        plt.savefig(os.path.join(save_dir, f"signals_{name_suffix}.png"), dpi=300)
+        out_path = os.path.join(save_dir, f"signals_{name_suffix}.png")
+        plt.savefig(out_path, dpi=300)
         plt.close()
-
-        print(f"Detection plot saved for step {step_index} ({target_name})")
+        print(f"✅ Detection plot saved: {out_path}")
 
     except Exception as e:
-        print(f"Error plotting detection signals: {e}")
+        print(f"❌ Error plotting detection signals: {e}")
         import traceback
         traceback.print_exc()
 
-def save_results(trials, calibration_params, out_path="eog_trial_results.csv"):
+def save_results(trials, calibration_params, out_path=None):
     """Save trial results to CSV file"""
     try:
+        # Default output path if not provided
+        if not out_path or out_path.strip() == "":
+            out_dir = os.path.join(os.getcwd(), "results")
+            os.makedirs(out_dir, exist_ok=True)
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            out_path = os.path.join(out_dir, f"eog_results_{timestamp}.csv")
+
+        else:
+            # Ensure directory exists
+            out_dir = os.path.dirname(out_path)
+            if out_dir:
+                os.makedirs(out_dir, exist_ok=True)
+
         with open(out_path, "w", newline="", encoding="utf-8") as f:
             writer = csv.DictWriter(f, fieldnames=[
                 "step_index", "target_name", "expected_h", "expected_v",
@@ -224,7 +236,9 @@ def save_results(trials, calibration_params, out_path="eog_trial_results.csv"):
             })
 
         print(f"Successfully saved results to {out_path}")
+        return True
     except Exception as e:
         print(f"Error saving results: {str(e)}")
         import traceback
         traceback.print_exc()
+        return False
