@@ -22,8 +22,8 @@ DETECT_WINDOW_DURATION = 3
 DETECT_MAX_SAMPLES = FS * DETECT_WINDOW_DURATION
 TOTAL_CHANNELS = 8
 CHANNEL_INDICES = [0, 1, 2, 7]  # (we'll form H = ch1 - ch3, V = ch8 - ch2)
-LOWCUT = 0.4
-HIGHCUT = 60
+LOWCUT = 0.1
+HIGHCUT = 40
 FILTER_ORDER = 4
 MERGE_WINDOW = int(0.12 * FS)  # samples
 GLOBAL_COOLDOWN = 0.8  # seconds between ANY two accepted detections

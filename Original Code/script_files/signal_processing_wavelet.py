@@ -24,15 +24,15 @@ def wavelet_transform(data, channel_type):
         return data
 
     if channel_type in ["ch2", "ch8"]:
-        wavelet = 'rbio3.1'
-        level = min(pywt.dwt_max_level(len(data), pywt.Wavelet(wavelet).dec_len), 4)
+        wavelet = 'db4'
+        level = 4
         coeffs = pywt.wavedec(data, wavelet, level=level)
         new_coeffs = [coeffs[0]]
         for i in range(1, len(coeffs)):
             threshold = np.std(coeffs[i]) * (0.7 if i==1 else 0.2)
             new_coeffs.append(pywt.threshold(coeffs[i], threshold, mode='soft'))
     else:
-        wavelet = 'rbio3.1'
+        wavelet = 'db4'
         level = 4
         coeffs = pywt.wavedec(data, wavelet, level=level)
         sigma = np.median(np.abs(coeffs[-1])) / 0.6745
