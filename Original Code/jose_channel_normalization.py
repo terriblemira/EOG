@@ -18,6 +18,7 @@ import collections
 import csv
 import os
 import numpy as np
+import pywt
 from pylsl import StreamInlet, resolve_byprop
 from scipy import signal as sig
 import matplotlib.pyplot as plt
@@ -49,11 +50,12 @@ DETECT_MAX_SAMPLES = FS * DETECT_WINDOW_DURATION
 TOTAL_CHANNELS = 8
 CHANNEL_INDICES = [0, 1, 2, 7]  # (we'll form H = ch1 - ch3, V = ch8 - ch2)
 LOWCUT = 0.4
-HIGHCUT = 30
+HIGHCUT = 60
 FILTER_ORDER = 4
 MERGE_WINDOW = int(0.12 * FS)  # samples
 GLOBAL_COOLDOWN = 0.8  # seconds between ANY two accepted detections
 LSL_STREAM_NAME = 'Explore_8441_ExG'
+
 
 # Debug flags
 DEBUG_SIGNALS = True
@@ -168,7 +170,7 @@ def calculate_normalized_baseline(calibration_data, channel_norm_factors, channe
 
 def calculate_channel_norm_factor(calibration_data, channel_name):
     """Calculate normalization factor for a specific channel across all directions"""
-    max_amplitudes = []
+    amplitudes = []
 
     for direction in calibration_data:
         if not calibration_data[direction][channel_name]:
@@ -177,20 +179,18 @@ def calculate_channel_norm_factor(calibration_data, channel_name):
         try:
             ch_data = np.array(calibration_data[direction][channel_name])
             ch_data = process_signal(ch_data, FS, channel_name)
-            max_amplitudes.append(np.percentile(np.abs(ch_data), 95))
+            amplitudes.append(np.percentile(np.abs(ch_data), 90))
         except Exception as e:
             print(f"Error processing {direction} {channel_name}: {str(e)}")
             continue
 
-    if max_amplitudes:
-        factor = np.median(max_amplitudes)
+    if amplitudes:
+        factor = np.median(amplitudes)
         return max(factor, 0.1)  # Ensure minimum factor
     return 1.0
 
 def calculate_direction_thresholds(calibration_data, channel_norm_factors, baselines):
-    """Calculate direction-specific thresholds using normalized signals"""
     thresholds = {}
-
     for direction, channel in [("left", "H"), ("right", "H"), ("up", "V"), ("down", "V")]:
         try:
             ch1 = np.array(calibration_data[direction]["ch1"])
@@ -216,32 +216,22 @@ def calculate_direction_thresholds(calibration_data, channel_norm_factors, basel
             else:  # V
                 signals = (ch8 - ch2) - baselines["V"]
 
-            # Use 90th percentile as threshold
+            # Use 95th percentile as threshold (more robust for EOG)
             abs_signals = np.abs(signals)
             if len(abs_signals) > 0:
-                # Calculate mean and standard deviation of the absolute signal
-                mean_val = np.mean(abs_signals)
-                std_val = np.std(abs_signals)
-
-                # Set threshold as mean + k * std, e.g., k = 2
-                k = 2
-                threshold = mean_val + k * std_val
-
-                # Ensure a minimum threshold
-                threshold = max(threshold, 0.05)
+                threshold = np.percentile(abs_signals, 95)  # 95th percentile
+                threshold = max(threshold, 0.05)  # Minimum threshold of 0.05
                 thresholds[direction] = threshold
-                threshold = max(threshold, 0.05)  # Ensure minimum threshold
-                thresholds[direction] = threshold
-                print(f"{direction} {channel} threshold: {threshold:.4f}")
+                print(f"{direction} {channel} threshold: {threshold:.2f}")
             else:
-                print(f"No valid signals for {direction} {channel}. Using default threshold.")
-                thresholds[direction] = 0.05
+                thresholds[direction] = 0.05  # Default threshold
 
         except Exception as e:
             print(f"Error calculating {direction} {channel} threshold: {str(e)}")
-            thresholds[direction] = 0.05
+            thresholds[direction] = 0.05  # Default threshold
 
     return thresholds
+
 
 def plot_calibration_signals(calibration_data, channel_norm_factors, baselines, thresholds):
     """Plot filtered signals with thresholds for debugging"""
@@ -310,6 +300,149 @@ def plot_calibration_signals(calibration_data, channel_norm_factors, baselines, 
 
     except Exception as e:
         print(f"Could not display/save signal plots: {e}")
+
+def plot_detection_window(eog_reader, step_index, target_name, expected_direction, detection=None, calibration_params=None):
+    """
+    Plot and save the detection window for a specific step
+    This plots the entire detection window for every step, regardless of whether a movement was detected
+    """
+    if not DEBUG_PLOTS:
+        return
+
+    try:
+        # Create directory for plots if it doesn't exist
+        plot_dir = "detection_plots"
+        os.makedirs(plot_dir, exist_ok=True)
+
+        # Get current timestamp for filename
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+        # Get the latest signals from the EOG reader
+        times = np.array(eog_reader.latest_times)
+        H = np.array(eog_reader.latest_H)
+        V = np.array(eog_reader.latest_V)
+
+        # Ensure all arrays have the same length
+        min_length = min(len(times), len(H), len(V))
+        if min_length == 0:
+            print(f"No signal data available for step {step_index+1} ({target_name})")
+            return
+
+        times = times[-min_length:]
+        H = H[-min_length:]
+        V = V[-min_length:]
+
+        # Create a figure
+        plt.figure(figsize=(12, 8))
+
+        # Plot H signal
+        plt.subplot(2, 1, 1)
+        plt.plot(times, H, label="H Signal", color='blue')
+        plt.axhline(y=calibration_params['thresholds']['right'], color='green', linestyle='--',
+                    label=f'Right Threshold={calibration_params["thresholds"]["right"]:.2f}')
+        plt.axhline(y=-calibration_params['thresholds']['left'], color='red', linestyle='--',
+                    label=f'Left Threshold={calibration_params["thresholds"]["left"]:.2f}')
+        plt.title(f"Horizontal Signal")
+        plt.xlabel("Time (s)")
+        plt.ylabel("Amplitude")
+        plt.legend()
+
+        # Plot V signal
+        plt.subplot(2, 1, 2)
+        plt.plot(times, V, label="V Signal", color='purple')
+        plt.axhline(y=calibration_params['thresholds']['down'], color='green', linestyle='--',
+                    label=f'Down Threshold={calibration_params["thresholds"]["down"]:.2f}')
+        plt.axhline(y=-calibration_params['thresholds']['up'], color='red', linestyle='--',
+                    label=f'Up Threshold={calibration_params["thresholds"]["up"]:.2f}')
+        plt.title(f"Vertical Signal")
+        plt.xlabel("Time (s)")
+        plt.ylabel("Amplitude")
+        plt.legend()
+
+        # Add detection markers if available
+        if detection:
+            detection_time = detection.ts
+            if detection.is_horizontal:
+                plt.subplot(2, 1, 1)
+                plt.axvline(x=detection_time, color='black', linestyle=':',
+                           label=f'Detection: {detection.direction} at {detection_time:.2f}s')
+                plt.legend()
+            else:
+                plt.subplot(2, 1, 2)
+                plt.axvline(x=detection_time, color='black', linestyle=':',
+                           label=f'Detection: {detection.direction} at {detection_time:.2f}s')
+                plt.legend()
+
+        # Create metadata string
+        expected_dir = ""
+        if expected_direction["expected_h"]:
+            expected_dir = expected_direction["expected_h"]
+        elif expected_direction["expected_v"]:
+            expected_dir = expected_direction["expected_v"]
+        else:
+            expected_dir = "center (no movement)"
+
+        detection_status = "No detection" if not detection else f"Detected: {detection.direction}"
+
+        # Add comprehensive title
+        plt.suptitle(f"Step {step_index+1}: {target_name}\nExpected: {expected_dir} | {detection_status}")
+
+        # Adjust layout
+        plt.tight_layout()
+
+        # Create filename based on target direction
+        direction_category = "center"
+        if expected_direction["expected_h"] == "left" or expected_direction["expected_h"] == "right":
+            direction_category = "horizontal"
+        elif expected_direction["expected_v"] == "up" or expected_direction["expected_v"] == "down":
+            direction_category = "vertical"
+
+        # Create subdirectory for direction category
+        direction_dir = os.path.join(plot_dir, direction_category)
+        os.makedirs(direction_dir, exist_ok=True)
+
+        # Save the plot with metadata in filename
+        plot_filename = f"step{step_index+1:03d}_{target_name}_{detection_status.replace(' ', '_')}_{timestamp}.png"
+        plot_path = os.path.join(direction_dir, plot_filename)
+        plt.savefig(plot_path, dpi=300, bbox_inches='tight')
+
+        print(f"Saved detection plot: {plot_path}")
+
+        # Also save a CSV with metadata
+        metadata = {
+            "step_index": step_index,
+            "target_name": target_name,
+            "expected_direction": expected_dir,
+            "detection_status": detection_status,
+            "timestamp": timestamp,
+            "plot_path": plot_path,
+            "h_threshold_left": calibration_params['thresholds']['left'],
+            "h_threshold_right": calibration_params['thresholds']['right'],
+            "v_threshold_up": calibration_params['thresholds']['up'],
+            "v_threshold_down": calibration_params['thresholds']['down'],
+            "h_max": np.max(np.abs(H)) if len(H) > 0 else 0,
+            "v_max": np.max(np.abs(V)) if len(V) > 0 else 0,
+            "h_mean": np.mean(H) if len(H) > 0 else 0,
+            "v_mean": np.mean(V) if len(V) > 0 else 0
+        }
+
+        # Save metadata to CSV
+        metadata_file = os.path.join(plot_dir, "detection_metadata.csv")
+        file_exists = os.path.isfile(metadata_file)
+
+        with open(metadata_file, 'a', newline='') as f:
+            writer = csv.DictWriter(f, fieldnames=metadata.keys())
+            if not file_exists:
+                writer.writeheader()
+            writer.writerow(metadata)
+
+        # Close the figure
+        plt.close()
+
+    except Exception as e:
+        print(f"Could not save detection plot for step {step_index+1}: {str(e)}")
+        import traceback
+        traceback.print_exc()
 
 def run_calibration(eog_reader, window, font, calibration_sequence, clock):
     """Run calibration to determine baselines and thresholds"""
@@ -390,7 +523,6 @@ def run_calibration(eog_reader, window, font, calibration_sequence, clock):
         else:
             print(f"WARNING: No samples collected for {target_name}!")
 
-    # Rest of the function remains unchanged...
     # Calculate channel normalization factors
     channel_norm_factors = {
         "ch1": calculate_channel_norm_factor(calibration_data, "ch1"),
@@ -487,11 +619,25 @@ class EOGReader(threading.Thread):
             ch3 = np.array(self.detect_channel_buffers[2])
             ch8 = np.array(self.detect_channel_buffers[7])
 
+            # Ensure all arrays have the same length
+            min_length = min(len(times), len(ch1), len(ch2), len(ch3), len(ch8))
+            if min_length == 0:
+                return
+
+            times = times[-min_length:]
+            ch1 = ch1[-min_length:]
+            ch2 = ch2[-min_length:]
+            ch3 = ch3[-min_length:]
+            ch8 = ch8[-min_length:]
+
             # Apply filters
             ch1 = process_signal(ch1, FS, "ch1")
             ch2 = process_signal(ch2, FS, "ch2")
             ch3 = process_signal(ch3, FS, "ch3")
             ch8 = process_signal(ch8, FS, "ch8")
+
+            # Normalize channels, calculate H and V, etc.
+
 
             # Normalize channels
             ch1 = ch1 / self.calibration_params["channel_norm_factors"]["ch1"]
@@ -804,6 +950,8 @@ def main():
     current_expected = expected_from_name(sequence[step_index][0])
     running = True
 
+    step_detection = []
+
     try:
         while running:
             # Handle events
@@ -828,6 +976,17 @@ def main():
             # Handle step advancement
             if (now - step_start) >= STEP_DURATION:
                 # Finalize scoring for previous step if no detection captured
+                # Plot the detection window for this step before advancing
+                # This ensures we plot the window for every step, regardless of detection
+                plot_detection_window(
+                    eog_reader=eog,
+                    step_index=step_index,
+                    target_name=sequence[step_index][0],
+                    expected_direction=current_expected,
+                    detection=None,  # No detection for this step
+                    calibration_params=calibration_params
+                )
+
                 if not step_captured:
                     is_correct = (current_expected["expected_h"] is None and current_expected["expected_v"] is None)
                     running_total += 1
@@ -894,6 +1053,26 @@ def main():
                     step_captured = True
                     running_total += 1
 
+                    # Plot the detection window with the detection marked
+                    if first_h_det is not None:
+                        plot_detection_window(
+                            eog_reader=eog,
+                            step_index=step_index,
+                            target_name=sequence[step_index][0],
+                            expected_direction=current_expected,
+                            detection=first_h_det,
+                            calibration_params=calibration_params
+                        )
+                    elif first_v_det is not None:
+                        plot_detection_window(
+                            eog_reader=eog,
+                            step_index=step_index,
+                            target_name=sequence[step_index][0],
+                            expected_direction=current_expected,
+                            detection=first_v_det,
+                            calibration_params=calibration_params
+                        )
+
                     # Determine if the step is correct
                     is_correct = False
 
@@ -938,10 +1117,6 @@ def main():
                         "h_value_min": step_min_h,
                         "v_value_max": step_max_v,
                         "v_value_min": step_min_v,
-                        "h_threshold_left": calibration_params['thresholds']['left'],
-                        "h_threshold_right": calibration_params['thresholds']['right'],
-                        "v_threshold_up": calibration_params['thresholds']['up'],
-                        "v_threshold_down": calibration_params['thresholds']['down']
                     })
 
             # Draw the interface
@@ -963,9 +1138,6 @@ def main():
             acc = (running_correct / running_total * 100.0) if running_total > 0 else 0.0
             overlay_lines = [
                 f"Step {step_index+1}/{len(sequence)} | Target: {sequence[step_index][0]} | "
-                f"Expect H: {current_expected['expected_h'] if current_expected['expected_h'] else 'None'}, "
-                f"Expect V: {current_expected['expected_v'] if current_expected['expected_v'] else 'None'}",
-                f"Window: {max(0.0, RESPONSE_WINDOW - (now - step_start)):.1f}s | "
                 f"H det: {first_h_det.direction if 'first_h_det' in locals() and first_h_det is not None else 'None'}, "
                 f"V det: {first_v_det.direction if 'first_v_det' in locals() and first_v_det is not None else 'None'}",
                 f"Max H: {step_max_h:.2f}, Max V: {step_max_v:.2f}",
