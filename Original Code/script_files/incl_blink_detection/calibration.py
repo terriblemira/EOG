@@ -715,8 +715,8 @@ def run_blink_calibration(eog_reader, window, font, clock, calibration_params):
                 # Calculate duration in seconds
                 duration = (times[end_idx] - times[start_idx])
 
-                # Only accept blinks with reasonable duration
-                if 0.05 <= duration <= 0.5:
+                # Only accept blinks with reasonable duration (extra wide range just in case)
+                if 0.03 <= duration <= 1.0:
                     blink_peaks.append(np.abs(peak_value))
             except Exception as e:
                 print(f"Error processing peak {peak_idx}: {e}")

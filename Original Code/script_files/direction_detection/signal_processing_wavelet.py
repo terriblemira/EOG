@@ -25,7 +25,7 @@ def wavelet_transform(data, channel_type):
 
     if channel_type in ["ch2", "ch8"]:
         wavelet = 'db4'
-        level = 1
+        level = 4
         coeffs = pywt.wavedec(data, wavelet, level=level)
         new_coeffs = [coeffs[0]]
         for i in range(1, len(coeffs)):
@@ -33,7 +33,7 @@ def wavelet_transform(data, channel_type):
             new_coeffs.append(pywt.threshold(coeffs[i], threshold, mode='soft'))
     else:
         wavelet = 'db4'
-        level = 1
+        level = 4
         coeffs = pywt.wavedec(data, wavelet, level=level)
         sigma = np.median(np.abs(coeffs[-1])) / 0.6745
         threshold = sigma * np.sqrt(2 * np.log(len(data)))
@@ -117,7 +117,7 @@ def process_eog_signals(ch1, ch2, ch3, ch8, calibration_params=None):
     V_raw -= calibration_params["baselines"]["V"]
 
     # Wavelet denoising
-    def wavelet_denoise(x, wavelet='db6', level=3):
+    def wavelet_denoise(x, wavelet='db4', level=4):
         coeffs = pywt.wavedec(x, wavelet, level=level)
         sigma = np.median(np.abs(coeffs[-1])) / 0.6745
         uthresh = sigma * np.sqrt(2 * np.log(len(x)))

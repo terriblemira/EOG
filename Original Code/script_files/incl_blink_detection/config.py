@@ -45,6 +45,6 @@ BLINK_MIN_SAMPLES = 3             # Minimum number of good blink samples needed
 BLINK_MAX_SAMPLES = 50            # Maximum number of blink samples to collect
 BLINK_THRESHOLD_MULTIPLIER = 1  # Multiplier for standard deviation to set threshold
 BLINK_MIN_DURATION = 0.05          # Minimum blink duration (seconds)
-BLINK_MAX_DURATION = 0.3          # Maximum blink duration (seconds)
+BLINK_MAX_DURATION = 0.5         # Maximum blink duration (seconds)
 BLINK_THRESHOLD = 2.0             # Default blink detection threshold (can be updated after calibration)
 BLINK_COOLDOWN = 0.1             # Minimum time between detected blinks (seconds)
