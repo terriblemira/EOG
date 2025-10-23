@@ -466,17 +466,19 @@ def run_blink_calibration(eog_reader, window, font, clock, calibration_params):
     print("Starting blink calibration...")
 
     # Wait for spacebar to start
-    from utils import wait_for_spacebar
     if not wait_for_spacebar(window, font, "Blink Calibration: Press SPACEBAR to begin"):
-        return None
+        return {"blink_threshold": BLINK_THRESHOLD}
+  # Return default threshold
 
     # Clear buffers
-    TOTAL_CHANNELS = 8
     for i in range(TOTAL_CHANNELS):
         eog_reader.channel_buffers[i].clear()
         eog_reader.detect_channel_buffers[i].clear()
     eog_reader.time_buffer.clear()
     eog_reader.detect_time_buffer.clear()
+
+    # Configuration parameters
+    total_prompts = int(BLINK_CALIBRATION_DURATION // BLINK_PROMPT_INTERVAL)
 
     start_time = time.time()
     end_time = start_time + BLINK_CALIBRATION_DURATION
@@ -484,88 +486,84 @@ def run_blink_calibration(eog_reader, window, font, clock, calibration_params):
     all_times = []
 
     # Display instruction
-    window.fill((255, 255, 255))
+    window.fill(BG_COLOR)
     instruction_surf = font.render(
-        "Blink Calibration: Blink naturally when circle is GREEN", True, (0, 0, 0)
+        "Blink Calibration: Blink when circle is GREEN", True, BLACK
     )
     window.blit(
         instruction_surf,
-        (window.get_width() // 2 - instruction_surf.get_width() // 2,
-         window.get_height() // 2 - 100)
+        (WIDTH // 2 - instruction_surf.get_width() // 2,
+         HEIGHT // 2 - 100)
     )
 
     # Add timer display
-    timer_surf = font.render(f"Time left: {BLINK_CALIBRATION_DURATION}s", True, (0, 0, 0))
+    timer_surf = font.render(f"Time left: {BLINK_CALIBRATION_DURATION}s", True, BLACK)
     window.blit(
         timer_surf,
-        (window.get_width() // 2 - timer_surf.get_width() // 2,
-         window.get_height() // 2 + 50)
+        (WIDTH // 2 - timer_surf.get_width() // 2,
+         HEIGHT // 2 + 50)
     )
+
+    # Draw a gray circle as reference
+    pygame.draw.circle(window, (150, 150, 150), (WIDTH // 2, HEIGHT // 2), 30, 2)
     pygame.display.flip()
 
     # Track blink prompts
     last_prompt_time = start_time
     prompt_count = 0
-    collected_blinks = 0
-
-    # Draw a gray circle as reference
-    pygame.draw.circle(window, (150, 150, 150), (window.get_width() // 2, window.get_height() // 2), 30, 2)
-    pygame.display.flip()
 
     # Main calibration loop
-    while time.time() < end_time:
+    while time.time() < end_time or prompt_count < total_prompts:
         current_time = time.time()
 
         # Check for quit events
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
-                return BLINK_THRESHOLD  # Return default on quit
+                return {"blink_threshold": BLINK_THRESHOLD}  # Return default on quit
 
         # Update timer display every second
         if int(current_time - start_time) % 1 == 0:
             remaining = max(0, int(end_time - current_time))
-            timer_surf = font.render(f"Time left: {remaining}s", True, (0, 0, 0))
+            timer_surf = font.render(f"Time left: {remaining}s", True, BLACK)
             window.blit(
                 timer_surf,
-                (window.get_width() // 2 - timer_surf.get_width() // 2,
-                 window.get_height() // 2 + 50)
+                (WIDTH // 2 - timer_surf.get_width() // 2,
+                 HEIGHT // 2 + 50)
             )
             pygame.display.flip()
 
         # Show blink prompt at regular intervals
-        total_prompts = int(BLINK_CALIBRATION_DURATION // BLINK_PROMPT_INTERVAL)
-
-        if current_time - last_prompt_time > BLINK_PROMPT_INTERVAL and prompt_count < total_prompts:
+        if current_time - last_prompt_time >= BLINK_PROMPT_INTERVAL and prompt_count < total_prompts:
             prompt_count += 1
             last_prompt_time = current_time
 
-            # Draw green circle as visual cue
-            window.fill((255, 255, 255))
+            # Update display with prompt
+            window.fill(BG_COLOR)
             window.blit(
                 instruction_surf,
-                (window.get_width() // 2 - instruction_surf.get_width() // 2,
-                 window.get_height() // 2 - 100)
+                (WIDTH // 2 - instruction_surf.get_width() // 2,
+                 HEIGHT // 2 - 100)
             )
 
             # Update timer
             remaining = max(0, int(end_time - current_time))
-            timer_surf = font.render(f"Time left: {remaining}s", True, (0, 0, 0))
+            timer_surf = font.render(f"Time left: {remaining}s", True, BLACK)
             window.blit(
                 timer_surf,
-                (window.get_width() // 2 - timer_surf.get_width() // 2,
-                 window.get_height() // 2 + 50)
+                (WIDTH // 2 - timer_surf.get_width() // 2,
+                 HEIGHT // 2 + 50)
             )
 
             # Draw prompt counter
-            prompt_surf = font.render(f"Blink {prompt_count}/{total_prompts}", True, (0, 0, 0))
+            prompt_surf = font.render(f"Blink {prompt_count}/{total_prompts}", True, BLACK)
             window.blit(
                 prompt_surf,
-                (window.get_width() // 2 - prompt_surf.get_width() // 2,
-                 window.get_height() // 2 - 50)
+                (WIDTH // 2 - prompt_surf.get_width() // 2,
+                 HEIGHT // 2 - 50)
             )
 
             # Draw green circle (blink prompt)
-            pygame.draw.circle(window, (0, 200, 0), (window.get_width() // 2, window.get_height() // 2), 30)
+            pygame.draw.circle(window, (0, 200, 0), (WIDTH // 2, HEIGHT // 2), 30)
             pygame.display.flip()
 
             # Keep the green circle visible for 0.5 seconds
@@ -573,34 +571,33 @@ def run_blink_calibration(eog_reader, window, font, clock, calibration_params):
             while time.time() < green_start + 0.5:
                 for event in pygame.event.get():
                     if event.type == pygame.QUIT:
-                        return None
-                clock.tick(250)
+                        return {"blink_threshold": BLINK_THRESHOLD}
+                clock.tick(FS)
 
             # Return to gray circle
-            window.fill((255, 255, 255))
+            window.fill(BG_COLOR)
             window.blit(
                 instruction_surf,
-                (window.get_width() // 2 - instruction_surf.get_width() // 2,
-                 window.get_height() // 2 - 100)
+                (WIDTH // 2 - instruction_surf.get_width() // 2,
+                 HEIGHT // 2 - 100)
             )
-            timer_surf = font.render(f"Time left: {max(0, int(end_time - time.time()))}s", True, (0, 0, 0))
+            timer_surf = font.render(f"Time left: {max(0, int(end_time - time.time()))}s", True, BLACK)
             window.blit(
                 timer_surf,
-                (window.get_width() // 2 - timer_surf.get_width() // 2,
-                 window.get_height() // 2 + 50)
+                (WIDTH // 2 - timer_surf.get_width() // 2,
+                 HEIGHT // 2 + 50)
             )
-            prompt_surf = font.render(f"Blink {prompt_count}/{total_prompts}", True, (0, 0, 0))
-
+            prompt_surf = font.render(f"Blink {prompt_count}/{total_prompts}", True, BLACK)
             window.blit(
                 prompt_surf,
-                (window.get_width() // 2 - prompt_surf.get_width() // 2,
-                 window.get_height() // 2 - 50)
+                (WIDTH // 2 - prompt_surf.get_width() // 2,
+                 HEIGHT // 2 - 50)
             )
-            pygame.draw.circle(window, (150, 150, 150), (window.get_width() // 2, window.get_height() // 2), 30, 2)
+            pygame.draw.circle(window, (150, 150, 150), (WIDTH // 2, HEIGHT // 2), 30, 2)
             pygame.display.flip()
 
         # Collect EOG data continuously
-        samples, timestamps = eog_reader.inlet.pull_chunk(timeout=0.01, max_samples=250)
+        samples, timestamps = eog_reader.inlet.pull_chunk(timeout=0.01, max_samples=FS)
         if samples:
             samples = np.array(samples)
             all_ch1.extend(samples[:, 0])
@@ -610,12 +607,12 @@ def run_blink_calibration(eog_reader, window, font, clock, calibration_params):
             all_times.extend([time.time() - start_time] * len(samples))
 
         pygame.event.pump()
-        clock.tick(250)
+        clock.tick(FS)
 
     # Process the collected data
     if len(all_ch1) == 0 or len(all_ch2) == 0 or len(all_ch3) == 0 or len(all_ch8) == 0:
         print("No data collected for blink calibration")
-        return BLINK_THRESHOLD  # Return default if no data
+        return {"blink_threshold": BLINK_THRESHOLD}  # Return default if no data
 
     # Convert to numpy arrays
     ch1 = np.array(all_ch1)
@@ -625,57 +622,132 @@ def run_blink_calibration(eog_reader, window, font, clock, calibration_params):
     times = np.array(all_times)
 
     # Process signals using process_eog_signals
-    H, V_denoised, V_filt = process_eog_signals(
-        ch1, ch2, ch3, ch8, calibration_params
-    )
+    try:
+        H, V_denoised, V_compensated = process_eog_signals(
+            ch1, ch2, ch3, ch8, calibration_params
+        )
+    except Exception as e:
+        print(f"Error processing signals for blink calibration: {e}")
+        import traceback
+        traceback.print_exc()
+        return {"blink_threshold": BLINK_THRESHOLD}
 
-    # Detect blinks in the processed V_filt signal
-    # Find peaks in the absolute value of the signal
-    peaks, _ = find_peaks(np.abs(V_filt), height=0.3, distance=50)  # Minimum distance between peaks
+    # Plot the entire blink calibration sequence
+    if DEBUG_PLOTS:
+        try:
+            # Create a list to store detected blink events for plotting
+            blink_samples = []
 
+            # Find peaks in the absolute value of the signal
+            peaks, _ = find_peaks(np.abs(V_compensated), height=1, distance=50)
+
+            # Extract blink characteristics for plotting
+            for peak_idx in peaks:
+                try:
+                    peak_value = V_compensated[peak_idx]
+
+                    # Find the start and end of the blink
+                    half_peak = np.abs(peak_value) / 2
+
+                    # Search backward for the start
+                    start_idx = peak_idx
+                    while start_idx > 0 and np.abs(V_compensated[start_idx]) > half_peak:
+                        start_idx -= 1
+
+                    # Search forward for the end
+                    end_idx = peak_idx
+                    while end_idx < len(V_compensated) - 1 and np.abs(V_compensated[end_idx]) > half_peak:
+                        end_idx += 1
+
+                    # Calculate duration in seconds
+                    duration = (times[end_idx] - times[start_idx])
+
+                    # Only accept blinks with reasonable duration (extra wide range due to wavelet processing)
+                    blink_samples.append({
+                            'peak_value': np.abs(peak_value),
+                            'duration': duration,
+                            'start_time': times[start_idx],
+                            'peak_time': times[peak_idx],
+                            'end_time': times[end_idx],
+                            'start_idx': start_idx,
+                            'peak_idx': peak_idx,
+                            'end_idx': end_idx
+                        })
+                except Exception as e:
+                    print(f"Error processing peak {peak_idx}: {e}")
+                    continue
+
+            # Call the plot_blink_calibration function
+            # Ensure same length before plotting
+            min_len = min(len(times), len(V_compensated))
+            times = times[:min_len]
+            V_compensated = V_compensated[:min_len]
+            plot_blink_calibration(V_compensated, times, blink_samples)
+
+        except Exception as e:
+            print(f"Error plotting blink calibration: {e}")
+            import traceback
+            traceback.print_exc()
+
+    # Detect blinks in the processed V_compensated signal
     blink_peaks = []
-    for peak_idx in peaks:
-        peak_value = V_filt[peak_idx]
+    try:
+        # Find peaks in the absolute value of the signal
+        peaks, _ = find_peaks(np.abs(V_compensated), height=0.3, distance=50)
 
-        # Find the start and end of the blink (where signal crosses half-peak)
-        half_peak = np.abs(peak_value) / 2
-        start_idx = peak_idx
-        while start_idx > 0 and np.abs(V_filt[start_idx]) > half_peak:
-            start_idx -= 1
+        for peak_idx in peaks:
+            try:
+                peak_value = V_compensated[peak_idx]
 
-        end_idx = peak_idx
-        while end_idx < len(V_filt) - 1 and np.abs(V_filt[end_idx]) > half_peak:
-            end_idx += 1
+                # Find the start and end of the blink
+                half_peak = np.abs(peak_value) / 2
 
-        # Calculate duration in seconds
-        duration = (times[end_idx] - times[start_idx])
+                # Search backward for the start
+                start_idx = peak_idx
+                while start_idx > 0 and np.abs(V_compensated[start_idx]) > half_peak:
+                    start_idx -= 1
 
-        # Only accept blinks with reasonable duration (50-300ms)
-        if 0.05 <= duration <= 0.3:
-            blink_peaks.append(np.abs(peak_value))
+                # Search forward for the end
+                end_idx = peak_idx
+                while end_idx < len(V_compensated) - 1 and np.abs(V_compensated[end_idx]) > half_peak:
+                    end_idx += 1
 
-    # Calculate blink threshold
-    if len(blink_peaks) >= BLINK_MIN_SAMPLES:
-        # Use mean + multiplier*std as threshold
-        mean_peak = np.mean(blink_peaks)
-        std_peak = np.std(blink_peaks)
-        blink_threshold = 0.5 * mean_peak + BLINK_THRESHOLD_MULTIPLIER * std_peak
+                # Calculate duration in seconds
+                duration = (times[end_idx] - times[start_idx])
 
-        # Ensure minimum threshold
-        blink_threshold = max(blink_threshold, 0.5)
+                # Only accept blinks with reasonable duration
+                if 0.05 <= duration <= 0.5:
+                    blink_peaks.append(np.abs(peak_value))
+            except Exception as e:
+                print(f"Error processing peak {peak_idx}: {e}")
+                continue
 
-        print(f"Blink calibration successful:")
-        print(f"- Detected {len(blink_peaks)} valid blinks")
-        print(f"- Mean peak amplitude: {mean_peak:.3f}")
-        print(f"- Std dev of peaks: {std_peak:.3f}")
-        print(f"- Calculated blink threshold: {blink_threshold:.3f}")
+        # Calculate blink threshold
+        if len(blink_peaks) >= BLINK_MIN_SAMPLES:
+            # Use mean + multiplier*std as threshold
+            mean_peak = np.mean(blink_peaks)
+            std_peak = np.std(blink_peaks)
+            blink_threshold = mean_peak * 0.75
 
-        return {"blink_threshold": blink_threshold}
+            # Ensure minimum threshold
+            blink_threshold = max(blink_threshold, 0.5)
 
-    else:
-        print(f"Warning: Only {len(blink_peaks)} valid blinks detected (minimum {BLINK_MIN_SAMPLES} required)")
-        print("Using default blink threshold")
-        return BLINK_THRESHOLD
+            print(f"Blink calibration successful:")
+            print(f"- Detected {len(blink_peaks)} valid blinks")
+            print(f"- Mean peak amplitude: {mean_peak:.3f}")
+            print(f"- Std dev of peaks: {std_peak:.3f}")
+            print(f"- Calculated blink threshold: {blink_threshold:.3f}")
+
+            return {"blink_threshold": blink_threshold}
+        else:
+            print(f"Warning: Only {len(blink_peaks)} valid blinks detected (minimum {BLINK_MIN_SAMPLES} required)")
+            print("Using default blink threshold")
+            return {"blink_threshold": BLINK_THRESHOLD}
+    except Exception as e:
+        print(f"Error detecting blinks: {e}")
+        import traceback
+        traceback.print_exc()
+        return {"blink_threshold": BLINK_THRESHOLD}
 
 def plot_blink_calibration(V_compensated, times, blink_samples):
     """Plot the blink calibration data with detected blinks marked"""
@@ -713,82 +785,5 @@ def plot_blink_calibration(V_compensated, times, blink_samples):
 
     except Exception as e:
         print(f"Error plotting blink calibration: {e}")
-        import traceback
-        traceback.print_exc()
-
-def calculate_blink_threshold_from_samples(blink_samples):
-    """
-    Calculate blink threshold from collected blink samples.
-    """
-    if not blink_samples or len(blink_samples) < BLINK_MIN_SAMPLES:
-        print(f"Warning: Insufficient blink samples ({len(blink_samples)} < {BLINK_MIN_SAMPLES}). Using default threshold.")
-        return BLINK_THRESHOLD
-
-    try:
-        # Extract peak values from blink samples
-        peak_values = [sample['peak_value'] for sample in blink_samples]
-
-        # Calculate statistics
-        mean_peak = np.mean(peak_values)
-        std_peak = np.std(peak_values)
-
-        # Calculate threshold as mean + multiplier * std
-        blink_threshold = mean_peak + BLINK_THRESHOLD_MULTIPLIER * std_peak
-
-        # Ensure minimum threshold
-        blink_threshold = max(blink_threshold, 0.5)
-
-        # Calculate typical blink duration for reference
-        durations = [sample['duration'] for sample in blink_samples]
-        typical_duration = np.median(durations)
-
-        print(f"Blink threshold calculation:")
-        print(f"- Based on {len(blink_samples)} blink samples")
-        print(f"- Mean peak amplitude: {mean_peak:.4f}")
-        print(f"- Std dev of peaks: {std_peak:.4f}")
-        print(f"- Calculated threshold: {blink_threshold:.4f}")
-        print(f"- Typical blink duration: {typical_duration:.3f}s")
-
-        # Plot histogram of peak values with threshold
-        if DEBUG_PLOTS:
-            plot_blink_threshold_histogram(peak_values, blink_threshold)
-
-        return blink_threshold, typical_duration
-
-    except Exception as e:
-        print(f"Error calculating blink threshold from samples: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        return BLINK_THRESHOLD, 0.1  # Return default threshold and duration
-
-def plot_blink_threshold_histogram(peak_values, blink_threshold):
-    """Plot histogram of blink peak values with threshold marked"""
-    try:
-        import matplotlib.pyplot as plt
-
-        plt.figure(figsize=(10, 6))
-        plt.hist(peak_values, bins=15, edgecolor='black', alpha=0.7)
-        plt.axvline(x=blink_threshold, color='r', linestyle='--',
-                   label=f'Threshold: {blink_threshold:.2f}')
-        plt.axvline(x=np.mean(peak_values), color='g', linestyle=':',
-                   label=f'Mean: {np.mean(peak_values):.2f}')
-        plt.title(f'Blink Peak Amplitude Distribution (n={len(peak_values)})')
-        plt.xlabel('Peak Amplitude')
-        plt.ylabel('Frequency')
-        plt.legend()
-        plt.grid(True)
-
-        # Save the plot
-        plot_dir = os.path.join(RESULTS_DIR, "calibration_plots")
-        os.makedirs(plot_dir, exist_ok=True)
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        plot_path = os.path.join(plot_dir, f"blink_threshold_histogram_{timestamp}.png")
-        plt.savefig(plot_path, dpi=300, bbox_inches='tight')
-        plt.close()
-
-        print(f"Saved blink threshold histogram to {plot_path}")
-
-    except Exception as e:
-        print(f"Error plotting blink threshold histogram: {e}")
         import traceback
         traceback.print_exc()
