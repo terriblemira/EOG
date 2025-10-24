@@ -32,7 +32,10 @@ class EOGReader(threading.Thread):
             "alpha": 0.0
         }
         self.last_blink_time = -1e9
+        DETECT_PERIOD = 0.1  # seconds between running detection on the buffer
         self.running = True
+        self.recent_detection_times = {}   # maps direction -> last push time (seconds since start)
+        self.detection_suppression = max(2 * DETECT_PERIOD, 0.5)   # seconds to suppress repeated detections of same direction
 
         # Buffers for plotting (5 seconds) and detection (1 second)
         self.channel_buffers = [collections.deque(maxlen=config.PLOT_MAX_SAMPLES) for _ in range(config.TOTAL_CHANNELS)]
@@ -149,11 +152,14 @@ class EOGReader(threading.Thread):
                 h_vel = abs(H_velocity[idx])
                 v_vel = abs(V_velocity[idx])
 
+                def recently_detected(direction):
+                    t = self.recent_detection_times.get(direction, -1e9)
+                    return (now - t) < self.detection_suppression
+
                 # --- Horizontal movements ---
                 if (
                     h_val > self.calibration_params["thresholds"]["right"]
                     and h_vel > H_VELOCITY_THRESHOLD
-                    and "right" not in detected_directions
                 ):
                     det = Detection(
                         ts=times[idx],
@@ -167,11 +173,12 @@ class EOGReader(threading.Thread):
                     if self._push(det):
                         print(f"Pushed right detection to queue at {times[idx]:.2f}s")
                         detected_directions.add("right")
+                        self.recent_detection_times["right"] = now
+                        continue
 
                 elif (
                     h_val < -self.calibration_params["thresholds"]["left"]
                     and h_vel > H_VELOCITY_THRESHOLD
-                    and "left" not in detected_directions
                 ):
                     det = Detection(
                         ts=times[idx],
@@ -185,12 +192,13 @@ class EOGReader(threading.Thread):
                     if self._push(det):
                         print(f"Pushed left detection to queue at {times[idx]:.2f}s")
                         detected_directions.add("left")
+                        self.recent_detection_times["left"] = now
+                        continue
 
                 # --- Vertical movements ---
                 if (
                     self.calibration_params['blink_threshold'] > v_val > self.calibration_params["thresholds"]["up"]
                     and v_vel > V_VELOCITY_THRESHOLD
-                    and "up" not in detected_directions
                 ):
                     det = Detection(
                         ts=times[idx],
@@ -204,11 +212,12 @@ class EOGReader(threading.Thread):
                     if self._push(det):
                         print(f"Pushed up detection to queue at {times[idx]:.2f}s")
                         detected_directions.add("up")
+                        self.recent_detection_times["up"] = now
+                        continue
 
                 elif (
                     v_val > self.calibration_params["thresholds"]["down"]
                     and v_vel > V_VELOCITY_THRESHOLD
-                    and "down" not in detected_directions
                 ):
                     det = Detection(
                         ts=times[idx],
@@ -222,7 +231,8 @@ class EOGReader(threading.Thread):
                     if self._push(det):
                         print(f"Pushed down detection to queue at {times[idx]:.2f}s")
                         detected_directions.add("down")
-
+                        self.recent_detection_times["down"] = now
+                        continue
 
         except Exception as e:
             print(f"Error in detection processing: {str(e)}")
