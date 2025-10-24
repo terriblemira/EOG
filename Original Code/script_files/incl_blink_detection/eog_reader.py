@@ -14,8 +14,8 @@ class Detection:
     is_horizontal: bool
     is_blink: bool = False  # Add blink flag
     blink_duration: float = 0.0
-    h_value: float = 0.0
-    v_value: float = 0.0
+    h_value: float = 0.0 # ch1 - ch3 --> + = look left, rounded to 1 decimal
+    v_value: float = 0.0 # ch8 - ch2 --> + = look up, "
     h_velocity: float = 0.0
     v_velocity: float = 0.0
 
@@ -55,10 +55,9 @@ class EOGReader(threading.Thread):
         self.start_time = time.time()
 
         # For plotting and debugging - store full buffer data
-        self.full_H = np.array([])
+        self.full_H = np.array([]) # all the h_value(s)
         self.full_V = np.array([])
-        self.full_times = np.array([])
-
+        self.full_times = np.array([]) # timestamps for each value of h_value+v_value
         # For detection - store detection window data
         self.latest_H = np.array([])
         self.latest_V = np.array([])
@@ -73,7 +72,7 @@ class EOGReader(threading.Thread):
         if (current_time - self.last_any_movement_time) >= config.GLOBAL_COOLDOWN:
             self.out_queue.append(det)
             while len(self.out_queue) > self.max_queue:
-                self.out_queue.popleft()
+                self.out_queue.popleft() # limit in case you have too many detections (f.ex. blinks) (more than (50=default) times) in 0.1s
             self.last_any_movement_time = current_time
             return True
         return False
@@ -141,9 +140,10 @@ class EOGReader(threading.Thread):
                 if self._push(det):
                     print(f"Pushed blink detection to queue at {times[blink['peak_index']]:.2f}s")
                     self.last_blink_time = current_time
+                    ## MIRA/DARSH: HERE TO ADD: give signal to webapp to move (blink)!
 
             # Check each sample for threshold crossing and velocity
-            now = time.time() - self.start_time
+            now = time.time() - self.start_time # current time in seconds since start
             detected_directions = set()  # Prevent multiple detections of the same direction per window
 
             for idx in range(1, len(H_corrected)):
@@ -159,7 +159,7 @@ class EOGReader(threading.Thread):
                 # --- Horizontal movements ---
                 if (
                     h_val > self.calibration_params["thresholds"]["right"]
-                    and h_vel > H_VELOCITY_THRESHOLD
+                    and h_vel > H_VELOCITY_THRESHOLD # pretty much always true bc Jose made vel.treshh.value low
                 ):
                     det = Detection(
                         ts=times[idx],
@@ -170,14 +170,15 @@ class EOGReader(threading.Thread):
                         h_velocity=h_vel,
                         v_velocity=v_vel
                     )
-                    if self._push(det):
-                        print(f"Pushed right detection to queue at {times[idx]:.2f}s")
+                    if self._push(det): # if cooldown function allows (if outcome is "yes")
+                        print(f"Pushed right detection to queue at {times[idx]:.2f}s") #times[exact sample]:.2f(rounded to 2 decimals)
                         detected_directions.add("right")
-                        self.recent_detection_times["right"] = now
+                        self.recent_detection_times["right"] = now # saves current timestamp as now
+                        ## MIRA/DARSH: HERE TO ADD: give signal to webapp to move (right)!
                         continue
 
                 elif (
-                    h_val < -self.calibration_params["thresholds"]["left"]
+                    h_val < -self.calibration_params["thresholds"]["left"] # if h_val is bigger than left threshold (positive bc looking left is +)
                     and h_vel > H_VELOCITY_THRESHOLD
                 ):
                     det = Detection(
@@ -193,6 +194,7 @@ class EOGReader(threading.Thread):
                         print(f"Pushed left detection to queue at {times[idx]:.2f}s")
                         detected_directions.add("left")
                         self.recent_detection_times["left"] = now
+                        ## MIRA/DARSH: HERE TO ADD: give signal to webapp to move (left)!
                         continue
 
                 # --- Vertical movements ---
@@ -213,6 +215,7 @@ class EOGReader(threading.Thread):
                         print(f"Pushed up detection to queue at {times[idx]:.2f}s")
                         detected_directions.add("up")
                         self.recent_detection_times["up"] = now
+                        ## MIRA/DARSH: HERE TO ADD: give signal to webapp to move (up)!
                         continue
 
                 elif (
@@ -232,6 +235,7 @@ class EOGReader(threading.Thread):
                         print(f"Pushed down detection to queue at {times[idx]:.2f}s")
                         detected_directions.add("down")
                         self.recent_detection_times["down"] = now
+                        ## MIRA/DARSH: HERE TO ADD: give signal to webapp to move (down)!
                         continue
 
         except Exception as e:
