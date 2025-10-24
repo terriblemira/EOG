@@ -4,8 +4,7 @@ from pathlib import Path
 from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect, Query
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
-
+from fastapi.templating import Jinja2Templates # fastAPI uses Jinja2 for rendering(=(anzeigen/darstellen/filling in data in)) Templates(=Vorlagen)
 from stream import get_stream_inlet, has_lsl_stream
 from signal_interpret import SignalInterpreter, CalibrationConfig   # <-- add CalibrationConfig
 from calibration import CalibrationSession
@@ -16,9 +15,25 @@ app = FastAPI(title="Game Glasses")
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 
+#Mira bc she doesn't know where to put this code, adding it here for now
+@app.websocket("/ws")
+async def websocket.endpoint(websocket: WebSocket):
+    await websocket.accept()
+    try:
+        while True: #M: to keep connection alive, attentive for incoming signals from eog_reader.py
+           signal = await websocket.receive_text() #M: wait for a signal from eog_reader.py
+            print(f"Received signal {signal}")
+           if signal == "right":
+               print("Move right command received (This could be the right action instead of just the 'right'-text")
+       # elif signal == "left":
+        #        print("Move left command received. This could be action instead of text") 
+        #...
+    except WebSocketDisconnect:
+        print("WebSocket disconnected")
+
 # ---------- Pages ----------
 @app.get("/", response_class=HTMLResponse)
-def signal_check(request: Request):
+def signal_check(request: Request): #request = "note that client brings in" (f.ex. header, cookies, 
     return templates.TemplateResponse("signal.html", {"request": request})
 
 @app.get("/index", response_class=HTMLResponse)
