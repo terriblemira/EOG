@@ -3,7 +3,7 @@ import collections
 import numpy as np
 import time
 from pylsl import StreamInlet, resolve_byprop
-from signal_processing_wavelet import process_eog_signals, process_eog_signals_with_blinks
+from signal_processing_wavelet import process_eog_signals
 import config
 from dataclasses import dataclass
 import asyncio # M:import bc of bool valid...Movement for webapp signal
@@ -14,39 +14,38 @@ class Detection:
     ts: float
     direction: str
     is_horizontal: bool
-    is_blink: bool = False  # Add blink flag
-    blink_duration: float = 0.0
     h_value: float = 0.0 #M: ch1 - ch3 --> + = look left/right??(--> Jose has to check bc see push det), rounded to 1 decimal
     v_value: float = 0.0 #M: ch8 - ch2 --> + = look up, "
     h_velocity: float = 0.0
     v_velocity: float = 0.0
 
+signal = None #module-level variable to store current movement signal for webapp
+
 class EOGReader(threading.Thread):
 
-    #M: function to send movement signal to webapp (not sending yet: just called when movement detected and valid (see below))
-    async def sendValidMovementRight():
-#TO MIRA: add webapp name below
-    uri = "ws://addwebappname/wsRight"
-    async with websockets.connect(uri) as websocket:
-        await websocket.send("right")
-        #--> s. line 189
+    #M: function to "create connection once, put it in self.ws and keep it open"; not running yet, will be called in run()
+    # async def connect_to_webapp(self):
+    #     try: 
+    #         uri = "ws://localhost:8000/wsRight"
+    #         self.ws = await websockets.connect(uri)
+    #         print("EOG Reader connected to webapp!")
+    #     except Exception as e1: #M: in case of error which otherwise would bring down the program (prints error & continues)
+    #         print(f"Error connecting to webapp: {str(e1)}")
 
-    def __init__(self, out_queue, max_queue=50, calibration_params=None):
+    def __init__(self, out_queue, max_queue=50, calibration_params=None): #M: Joses init function
         super().__init__()
+  #      self.ws = None #M: ws = variable for websocket connection that is right now empty (None) and will get filled with await... in connect_to_webapp()
+    #    self.eventLoop = None #M: event loop = "Main Thread" (1st started function when running, in this case "async def main()" in main.py); "Motor" for all asyncio functions; variable eventLoop gets filled with actual event loop in main.py (with eog.loop = asyncio.get_event_loop())
+
         self.out_queue = out_queue
         self.max_queue = max_queue
         self.calibration_params = calibration_params or {
             "baselines": {"H": 0, "V": 0},
             "thresholds": {"left": 0.3, "right": 0.3, "up": 0.3, "down": 0.3},
-            "blink_threshold": config.BLINK_THRESHOLD,
             "channel_norm_factors": {"ch1": 1, "ch2": 1, "ch3": 1, "ch8": 1},
             "alpha": 0.0
         }
-        self.last_blink_time = -1e9
-        DETECT_PERIOD = 0.1  # seconds between running detection on the buffer
         self.running = True
-        self.recent_detection_times = {}   # maps direction -> last push time (seconds since start)
-        self.detection_suppression = max(2 * DETECT_PERIOD, 0.5)   # seconds to suppress repeated detections of same direction
 
         # Buffers for plotting (5 seconds) and detection (1 second)
         self.channel_buffers = [collections.deque(maxlen=config.PLOT_MAX_SAMPLES) for _ in range(config.TOTAL_CHANNELS)]
@@ -60,15 +59,16 @@ class EOGReader(threading.Thread):
         print("Looking for LSL stream...")
         streams = resolve_byprop('name', config.LSL_STREAM_NAME, timeout=5.0)
         if not streams:
-            raise RuntimeError(f"{config.LSL_STREAM_NAME} stream not found")
+            raise RuntimeError(f"{config.LSL_STREAM_NAME} stream not found") # signal sth went wrong (not continuing like "except Exception as e")
         self.inlet = StreamInlet(streams[0])
         print("Connected to stream.")
         self.start_time = time.time()
 
         # For plotting and debugging - store full buffer data
         self.full_H = np.array([]) #M: all the h_value(s)
-        self.full_V = np.array([])
+        self.full_V = np.array([]) 
         self.full_times = np.array([]) #M: timestamps for each value of h_value+v_value
+
         # For detection - store detection window data
         self.latest_H = np.array([])
         self.latest_V = np.array([])
@@ -83,13 +83,13 @@ class EOGReader(threading.Thread):
         if (current_time - self.last_any_movement_time) >= config.GLOBAL_COOLDOWN:
             self.out_queue.append(det)
             while len(self.out_queue) > self.max_queue:
-                self.out_queue.popleft() #M: limit in case you have too many detections (f.ex. blinks) (more than (50=default) times) in 0.1s
+                self.out_queue.popleft()  #M: limit in case you have too many detections (f.ex. blinks) (more than (50=default) times) in 0.1s
             self.last_any_movement_time = current_time
             return True
         return False
 
     def process_detection_window(self):
-        """Process the detection window and check for saccades and blinks"""
+        """Process the detection window and check for saccades"""
         try:
             # Use the detection window buffers
             times = np.array(self.detect_time_buffer)
@@ -110,7 +110,7 @@ class EOGReader(threading.Thread):
             ch8 = ch8[-min_length:]
 
             # process signals with alpha compensation
-            H_corrected, V_corrected, V_compensated, blink_events = process_eog_signals_with_blinks(ch1, ch2, ch3, ch8, self.calibration_params)
+            H_corrected, V_corrected, V_compensated = process_eog_signals(ch1, ch2, ch3, ch8, self.calibration_params)
 
             # Update latest signals for detection
             self.latest_H = H_corrected
@@ -118,61 +118,26 @@ class EOGReader(threading.Thread):
             self.latest_times = times
 
             # Define velocity thresholds
-            H_VELOCITY_THRESHOLD = 0.05  
-            V_VELOCITY_THRESHOLD = 0.05  
+            H_VELOCITY_THRESHOLD = 0.05  # Lower threshold for horizontal movements
+            V_VELOCITY_THRESHOLD = 0.05  # Lower threshold for vertical movements
 
             # Calculate velocity (derivative)
             H_velocity = np.gradient(H_corrected)
             V_velocity = np.gradient(V_compensated)
 
-            # Handle blink events
-            current_time = time.time() - self.start_time
-            for blink in blink_events:
-                # check cooldown
-                if (current_time - self.last_blink_time) < config.BLINK_COOLDOWN:
-                    continue
-
-                if abs(V_compensated[blink['peak_index']]) < self.calibration_params['blink_threshold']:
-                    continue  # Ignore small blinks
-
-            # Create a blink detection
-                det = Detection(
-                    ts=times[blink['peak_index']],
-                    direction='blink',
-                    is_horizontal=False,
-                    is_blink=True,
-                    blink_duration=blink['duration'],
-                    h_value=H_corrected[blink['peak_index']],
-                    v_value=V_compensated[blink['peak_index']],
-                    h_velocity=H_velocity[blink['peak_index']],
-                    v_velocity=V_velocity[blink['peak_index']]
-                )
-
-                if self._push(det):
-                    print(f"Pushed blink detection to queue at {times[blink['peak_index']]:.2f}s")
-                    self.last_blink_time = current_time
-                    ##M: MIRA/DARSH: HERE TO ADD: give signal to webapp to move (blink)!
+            # Minimum movement threshold
+            MIN_V_MOVEMENT = 0.5
 
             # Check each sample for threshold crossing and velocity
-            now = time.time() - self.start_time # current time in seconds since start
-            detected_directions = set()  # Prevent multiple detections of the same direction per window
-
+            now = time.time() - self.start_time
             for idx in range(1, len(H_corrected)):
                 h_val = H_corrected[idx]
                 v_val = V_compensated[idx]
                 h_vel = abs(H_velocity[idx])
                 v_vel = abs(V_velocity[idx])
 
-                def recently_detected(direction):
-                    t = self.recent_detection_times.get(direction, -1e9)
-                    return (now - t) < self.detection_suppression
-#TO JOSE: not a "continue" missing?
-
-                # --- Horizontal movements ---
-                if (
-                    h_val < -self.calibration_params["thresholds"]["right"]
-                    and h_vel > H_VELOCITY_THRESHOLD # pretty much always true bc Jose made vel.treshh.value low
-                ):
+                # Check for horizontal movements with velocity
+                if h_val < -self.calibration_params["thresholds"]["right"] and h_vel > H_VELOCITY_THRESHOLD: # 2nd pretty much always true bc Jose made vel.treshh.value low
                     det = Detection(
                         ts=times[idx],
                         direction='right',
@@ -182,18 +147,15 @@ class EOGReader(threading.Thread):
                         h_velocity=h_vel,
                         v_velocity=v_vel
                     )
-                    if self._push(det): # if cooldown function allows (if outcome is "yes")
-                        print(f"Pushed right detection to queue at {times[idx]:.2f}s") #times[exact sample]:.2f(rounded to 2 decimals)
-                        detected_directions.add("right")
-                        self.recent_detection_times["right"] = now # saves current timestamp as now
-                        ##M: MIRA/DARSH: HERE TO ADD: give signal to webapp to move (right)!
-                        asyncio.create_task(sendValidMovementRight()) # M: now: send signal to webapp to move right 
+                    if self._push(det): # ...and if cooldown function allows (if outcome is "yes"): do following:
+                        print(f"Pushed right detection to queue at {times[idx]:.2f}s") #M: "times[exact sample]:.2f"(rounded to 2 decimals)
+                        ##M: MIRA/DARSH: ADDED: give signal to webapp to move (right):
+                        global signal #M: access module-level variable, so not just accessible in this function
+                        signal = "right"
+                        # self.send_valid_movement() #replace (signal) in "self.send_valid_movement(signal)" with ("right")
                         continue
 
-                elif (
-                    h_val > self.calibration_params["thresholds"]["left"] # if h_val is bigger/smaller? than left threshold (positive bc looking left is +)
-                    and h_vel > H_VELOCITY_THRESHOLD
-                ):
+                elif h_val > self.calibration_params["thresholds"]["left"] and h_vel > H_VELOCITY_THRESHOLD:
                     det = Detection(
                         ts=times[idx],
                         direction='left',
@@ -205,16 +167,10 @@ class EOGReader(threading.Thread):
                     )
                     if self._push(det):
                         print(f"Pushed left detection to queue at {times[idx]:.2f}s")
-                        detected_directions.add("left")
-                        self.recent_detection_times["left"] = now
                         ##M: MIRA/DARSH: HERE TO ADD: give signal to webapp to move (left)!
-                        continue
 
-                # --- Vertical movements ---
-                if (
-                    self.calibration_params['blink_threshold'] > v_val > self.calibration_params["thresholds"]["up"]
-                    and v_vel > V_VELOCITY_THRESHOLD
-                ):
+                # Check for vertical movements with velocity and minimum amplitude
+                if v_val < -self.calibration_params["thresholds"]["up"] and v_vel > V_VELOCITY_THRESHOLD:
                     det = Detection(
                         ts=times[idx],
                         direction='up',
@@ -226,15 +182,9 @@ class EOGReader(threading.Thread):
                     )
                     if self._push(det):
                         print(f"Pushed up detection to queue at {times[idx]:.2f}s")
-                        detected_directions.add("up")
-                        self.recent_detection_times["up"] = now
                         ##M: MIRA/DARSH: HERE TO ADD: give signal to webapp to move (up)!
-                        continue
-
-                elif (
-                    v_val > self.calibration_params["thresholds"]["down"]
-                    and v_vel > V_VELOCITY_THRESHOLD
-                ):
+                
+                elif v_val > self.calibration_params["thresholds"]["down"] and v_vel > V_VELOCITY_THRESHOLD:
                     det = Detection(
                         ts=times[idx],
                         direction='down',
@@ -246,15 +196,17 @@ class EOGReader(threading.Thread):
                     )
                     if self._push(det):
                         print(f"Pushed down detection to queue at {times[idx]:.2f}s")
-                        detected_directions.add("down")
-                        self.recent_detection_times["down"] = now
                         ##M: MIRA/DARSH: HERE TO ADD: give signal to webapp to move (down)!
-                        continue
 
         except Exception as e:
             print(f"Error in detection processing: {str(e)}")
             import traceback
             traceback.print_exc()
+
+    #M: LOCATE AFTER push_functions for overview. function to send movement signal to webapp (not sending yet: just called when movement detected and valid (see below))
+    # async def send_valid_movement(self, signal):
+    #     if self.ws and self.eventLoop:
+    #         asyncio.run_coroutine_threadsafe(self.ws.send(signal), self.eventLoop) #M: equivalent to create_task but compatible with threads
 
     def run(self):
         """Main thread loop for reading and processing EOG data"""

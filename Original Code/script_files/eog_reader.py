@@ -120,7 +120,7 @@ class EOGReader(threading.Thread):
                 v_vel = abs(V_velocity[idx])
 
                 # Check for horizontal movements with velocity
-                if h_val > self.calibration_params["thresholds"]["right"] and h_vel > H_VELOCITY_THRESHOLD:
+                if h_val < -self.calibration_params["thresholds"]["right"] and h_vel > H_VELOCITY_THRESHOLD:
                     det = Detection(
                         ts=times[idx],
                         direction='right',
@@ -133,7 +133,7 @@ class EOGReader(threading.Thread):
                     if self._push(det):
                         print(f"Pushed right detection to queue at {times[idx]:.2f}s")
 
-                elif h_val < -self.calibration_params["thresholds"]["left"] and h_vel > H_VELOCITY_THRESHOLD:
+                elif h_val > self.calibration_params["thresholds"]["left"] and h_vel > H_VELOCITY_THRESHOLD:
                     det = Detection(
                         ts=times[idx],
                         direction='left',

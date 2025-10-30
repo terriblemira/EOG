@@ -3,11 +3,12 @@ import collections
 import numpy as np
 import time
 from pylsl import StreamInlet, resolve_byprop
-from signal_processing_wavelet import process_eog_signals, process_eog_signals_with_blinks
+from signal_processing_wavelet_inclblinks import process_eog_signals, process_eog_signals_with_blinks
 import config
 from dataclasses import dataclass
 import asyncio # M:import bc of bool valid...Movement for webapp signal
 import websockets # M:import bc of bool valid...Movement for webapp signal
+#from eog_readerIncblinksInBackend import sendValidMovementRight # M: import the function to send RightSignal to webapp
 
 @dataclass
 class Detection:
@@ -23,13 +24,23 @@ class Detection:
 
 class EOGReader(threading.Thread):
 
+    def __init__(self): 
+        self.ws = None #M: ws = variable for websocket connection that is right now empty (None) and will get filled with await... in connect_to_webapp()
+        self.eventLoop = None #M: event loop = "Main Thread" (1st started function when running, in this case "async def main()" in main.py); "Motor" for all asyncio functions; variable eventLoop gets filled with actual event loop in main.py (with eog.loop = asyncio.get_event_loop())
+
+    #M: function to "create connection once, put it in self.ws and keep it open"; not running yet, will be called in run()
+    async def connect_to_webapp(self):
+        try: 
+            uri = "ws://localhost:8000/wsRight"
+            self.ws = await websockets.connect(uri)
+            print("EOG Reader connected to webapp!")
+        except Exception as e1: #M: in case of error which otherwise would bring down the program (prints error & continues)
+            print(f"Error connecting to webapp: {str(e1)}")
+
     #M: function to send movement signal to webapp (not sending yet: just called when movement detected and valid (see below))
-    async def sendValidMovementRight():
-#TO MIRA: add webapp name below
-    uri = "ws://addwebappname/wsRight"
-    async with websockets.connect(uri) as websocket:
-        await websocket.send("right")
-        #--> s. line 189
+    async def send_valid_movement_right(self):
+        if self.ws and self.eventLoop:
+            asyncio.run_coroutine_threadsafe(self.ws.send(signal), self.eventLoop) #M: equivalent to create_task but compatible with threads
 
     def __init__(self, out_queue, max_queue=50, calibration_params=None):
         super().__init__()
@@ -165,8 +176,7 @@ class EOGReader(threading.Thread):
 
                 def recently_detected(direction):
                     t = self.recent_detection_times.get(direction, -1e9)
-                    return (now - t) < self.detection_suppression
-#TO JOSE: not a "continue" missing?
+                    return (now - t) < self.detection_suppression #M: no need for continue bc return signals "end"
 
                 # --- Horizontal movements ---
                 if (
@@ -186,12 +196,13 @@ class EOGReader(threading.Thread):
                         print(f"Pushed right detection to queue at {times[idx]:.2f}s") #times[exact sample]:.2f(rounded to 2 decimals)
                         detected_directions.add("right")
                         self.recent_detection_times["right"] = now # saves current timestamp as now
-                        ##M: MIRA/DARSH: HERE TO ADD: give signal to webapp to move (right)!
-                        asyncio.create_task(sendValidMovementRight()) # M: now: send signal to webapp to move right 
+
+                        self.send_valid_movement_right("right") #replace (signal) with ("right")
+
                         continue
 
                 elif (
-                    h_val > self.calibration_params["thresholds"]["left"] # if h_val is bigger/smaller? than left threshold (positive bc looking left is +)
+                    h_val > self.calibration_params["thresholds"]["left"] #SOLVED! if h_val is bigger/smaller? than left threshold (positive bc looking left is +)
                     and h_vel > H_VELOCITY_THRESHOLD
                 ):
                     det = Detection(

@@ -7,7 +7,9 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates # fastAPI uses Jinja2 for rendering(=(anzeigen/darstellen/filling in data in)) Templates(=Vorlagen)
 from stream import get_stream_inlet, has_lsl_stream
 from signal_interpret import SignalInterpreter, CalibrationConfig   # <-- add CalibrationConfig
-from calibration import CalibrationSession
+from calibration_placeh import CalibrationSession
+import eog_reader
+
 
 BASE_DIR = Path(__file__).resolve().parent
 app = FastAPI(title="Game Glasses")
@@ -16,20 +18,29 @@ app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 
 #Mira bc she doesn't know where to put this code, adding it here for now
-@app.websocket("/ws")
-async def websocket.endpoint(websocket: WebSocket):
+@app.websocket("/wsMovement")
+async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
+    print("EOG_reader connected to /wsMovement")
+
     try:
         while True: #M: to keep connection alive, attentive for incoming signals from eog_reader.py
-           signal = await websocket.receive_text() #M: wait for a signal from eog_reader.py
-            print(f"Received signal {signal}")
-           if signal == "right":
-               print("Move right command received (This could be the right action instead of just the 'right'-text")
-       # elif signal == "left":
-        #        print("Move left command received. This could be action instead of text") 
-        #...
+            # signal = await websocket.receive_text() #M: wait for a signal from eog_reader.py
+            # print(f"Received signal {signal}")
+
+            if eog_reader.signal == "right":
+                await websocket.send_text("Right-command received (This could be the right action instead of just the 'right'-text)")
+                eog_reader.signal = None  # Reset signal after processing so does not repeat
+
+            await asyncio.sleep(0.1)  # Small delay
+
+#M:TODO: Hier an Browser weiterleiten (mit template??)            
+            # elif signal == "left":
+            #     print("Move left command received. This could be action instead of text")
+            # ...
+
     except WebSocketDisconnect:
-        print("WebSocket disconnected")
+        print("WebSocket to EOG disconnected")
 
 # ---------- Pages ----------
 @app.get("/", response_class=HTMLResponse)
