@@ -144,7 +144,8 @@ def run_calibration(eog_reader, window, font, calibration_sequence, clock):
     }
 
 #START MAIN-Function
-async def main():
+#M: async def main():
+def main():
     """Main application function"""
     # Initialize Pygame
     pygame.init()
@@ -213,14 +214,20 @@ async def main():
     det_queue = collections.deque(maxlen=50)
     eog = EOGReader(det_queue)
     #M added:
-    eog.loop = asyncio.get_event_loop() #M: Websocket Setup
-    await eog.connect_to_webapp() #M: verbindet & hält Verbindung zu app.py
-    eog.start() #M: start eog_reader (thread)
+    #M:MAYBE back in: eog.eventLoop = asyncio.get_event_loop() #M: Websocket Setup
+    #await eog.connect_to_webapp() #M: verbindet & hält Verbindung zu app.py
+    eog.start() #M: start eog_reader (thread) with default calibration_params (default thresholds, etc.)
 
     # Run calibration
-    calibration_params = run_calibration(eog, window, font, calibration_sequence, clock)
-    eog.calibration_params = calibration_params
 
+    eog.raw_log = []
+    eog.record_raw = True
+    calibration_params = run_calibration(eog, window, font, calibration_sequence, clock) #runs function with parameters in brackets and saves outcome as "(main_calib_and_pyg.)calibration_params" (eog.calibration_params not changed yet!)
+    eog.record_raw = False
+    eog.save_raw_data(os.path.join(RESULTS_DIR, "calibration_raw_signals.csv"))
+    #samples, timestamps = eog.inlet.pull_chunk(timeout=0.01)
+    eog.calibration_params = calibration_params # Update calibration params in EOG Reader from default to new
+    #M: idea for saved csv instead of live: from utils import startOfBreakingTime, endOfBreakingTime) "while startOfBreakingTime is not 0: get startOfBreakingTime" - startofBreakingTime and save in csv alongside raw data"
     print(f"\nCalibration complete:")
     print(f"Baselines: {calibration_params['baselines']}")
     print(f"Thresholds: {calibration_params['thresholds']}")
@@ -330,7 +337,7 @@ async def main():
                 }
                 trials.append(trial_data)
 
-                # Plot the detection window for this step
+                # Plot the detection window for this step (M: for the test)
                 plot_detection_window(
                     eog_reader=eog,
                     step_index=step_index,
@@ -409,4 +416,4 @@ async def main():
         pygame.quit()
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()

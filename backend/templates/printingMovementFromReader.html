@@ -1,7 +1,4 @@
-from fastapi.responses import HTMLResponse
-import asyncio
-
-@app.get("/printMovement") <!--M:connection between HTML file and browser; TYPE THIS in Browser to access --> 
+@app.get("/printingMovementFromReader") <!--M:connection between HTML file and browser; TYPE THIS in Browser to access --> 
 async def create_page_f_realtime_moves():
     return HTMLResponse(content="""
 <!doctype html>
@@ -15,7 +12,7 @@ async def create_page_f_realtime_moves():
   </main>
   <script>
     const movementWebsocket = new WebSocket(`ws://localhost:8000/wsMovement`); //M: DON'T TYPE this into browser. connection to WebSocket endpoint (@app.websocket("/wsMovement")) in backend (app.py) that sends movement messages
-    
+        
     movementWebsocket.onmessage = function(movementText) { //M: onmessage: triggered when WebSocket receives a message from server(backend). function = JavaSkriptkeyword to say left part is function with parameter movementText in it 
         document.getElementById("movementStatus").textContent = movementText.data; //M: document = built-in JavaScript object that represents entire HTML webpage loaded in browser. data property of movementText contains actual text message sent from server --> replace part of HTML-page with id"movementStatus" with received text (movementText.data)
     }; //M: text stays until next message from server(backend)

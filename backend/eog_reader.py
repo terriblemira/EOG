@@ -36,7 +36,8 @@ class EOGReader(threading.Thread):
         super().__init__()
   #      self.ws = None #M: ws = variable for websocket connection that is right now empty (None) and will get filled with await... in connect_to_webapp()
     #    self.eventLoop = None #M: event loop = "Main Thread" (1st started function when running, in this case "async def main()" in main.py); "Motor" for all asyncio functions; variable eventLoop gets filled with actual event loop in main.py (with eog.loop = asyncio.get_event_loop())
-
+        self.raw_log = []  # To store raw data if recording is enabled
+        self.record_raw = False  # Flag to control raw data recording
         self.out_queue = out_queue
         self.max_queue = max_queue
         self.calibration_params = calibration_params or {
@@ -90,6 +91,7 @@ class EOGReader(threading.Thread):
 
     def process_detection_window(self):
         """Process the detection window and check for saccades"""
+        global signal #M: access module-level variable, so not just accessible in this function
         try:
             # Use the detection window buffers
             times = np.array(self.detect_time_buffer)
@@ -150,7 +152,6 @@ class EOGReader(threading.Thread):
                     if self._push(det): # ...and if cooldown function allows (if outcome is "yes"): do following:
                         print(f"Pushed right detection to queue at {times[idx]:.2f}s") #M: "times[exact sample]:.2f"(rounded to 2 decimals)
                         ##M: MIRA/DARSH: ADDED: give signal to webapp to move (right):
-                        global signal #M: access module-level variable, so not just accessible in this function
                         signal = "right"
                         # self.send_valid_movement() #replace (signal) in "self.send_valid_movement(signal)" with ("right")
                         continue
@@ -220,6 +221,10 @@ class EOGReader(threading.Thread):
 
             now = time.time() - self.start_time
 
+#Add raw data logging if enabled
+            if self.record_raw:
+                self.raw_log.append([now] + list(sample))
+
             # Add to plot buffers (5 seconds)
             self.time_buffer.append(now)
             for i in range(config.TOTAL_CHANNELS):
@@ -271,6 +276,18 @@ class EOGReader(threading.Thread):
             if (current_time - last_detection_check) >= DETECT_PERIOD and len(self.detect_time_buffer) >= config.DETECT_MAX_SAMPLES:
                 last_detection_check = current_time
                 self.process_detection_window()
+
+    def save_raw_data(self, filename):
+        """Save recorded raw data to CSV"""
+        if len(self.raw_log) == 0:
+            print(f"No raw data to save for {filename}")
+            return
+        import csv
+        with open(filename, 'w', newline='') as f:
+            writer = csv.writer(f)
+            writer.writerow(["time"] + [f"ch{i}" for i in range(1, len(self.raw_log[0]))])
+            writer.writerows(self.raw_log)
+        print(f"Raw data saved to {filename}")
 
     def stop(self):
         """Stop the thread"""

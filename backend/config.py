@@ -1,3 +1,5 @@
+import os
+from datetime import datetime
 # ==============================
 # -------- Settings ------------
 # ==============================
@@ -33,3 +35,6 @@ LSL_STREAM_NAME = 'Explore_8441_ExG'
 DEBUG_SIGNALS = True
 DEBUG_DETECTION = True
 DEBUG_PLOTS = True
+
+RESULTS_DIR = os.path.join("results", datetime.now().strftime("%Y%m%d_%H%M%S"))
+os.makedirs(RESULTS_DIR, exist_ok=True)

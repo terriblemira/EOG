@@ -9,24 +9,35 @@ from datetime import datetime
 from config import DEBUG_PLOTS, BG_COLOR, BLACK, PLOT_BUFFER_DURATION
 # Create a shared, date-stamped results folder
 from datetime import datetime
-import os
-from calibration import RESULTS_DIR
+from config import RESULTS_DIR
+import time
 csv_path = os.path.join(RESULTS_DIR, "eog_trial_results.csv")
+
+start_time = time.time() #M: store start time of program to calculate timepoints later
+startOfBreakTime = 0  #M: global variable to store timepoint of break starting
+setBreakMarker = False  #M: global variable to mark breaks in data when spacebar pressed
+endOfBreakTime = 0  #M: global variable to store timepoint of break ending
 
 def wait_for_spacebar(window, font, message="Press SPACEBAR to continue"):
     """Display message and wait for SPACEBAR press"""
+    global startOfBreakTime #M: globals need to be declared AT BEGINNING of functions
+    global setBreakMarker
+    global endOfBreakTime
     window.fill(BG_COLOR)
     instruction_surf = font.render(message, True, BLACK)
     window.blit(instruction_surf, (window.get_width() // 2 - instruction_surf.get_width() // 2,
                                       window.get_height() // 2))
     pygame.display.flip()
     waiting = True
+    startOfBreakTime = time.time() - start_time  #M: global variable to store timepoint of break start
     while waiting:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.quit()
                 return False
             if event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
+                setBreakMarker = True  #M: set global variable to True when spacebar pressed (to mark breaks in data)
+                endOfBreakTime = time.time() - start_time #M: store timepoint of break ending
                 waiting = False
         pygame.time.delay(100)
     return True
@@ -125,6 +136,9 @@ def plot_detection_window(
         plt.ylabel("H Amplitude")
         if expected_direction:
             plt.text(0.02, 0.9, f"Expected H: {expected_direction.get('expected_h')}", transform=plt.gca().transAxes)
+        if setBreakMarker: #M: mark ending of break (when pressing spacebar) with v line
+            plt.axvspan(startOfBreakTime, endOfBreakTime, color='b', linestyle='--', label='Break Marker', alpha =0.2)
+            plt.text(startOfBreakTime + (endOfBreakTime-startOfBreakTime)/2, f"Break", ha='center', color= 'b')
         plt.legend()
 
         # V plot
@@ -136,6 +150,11 @@ def plot_detection_window(
         plt.ylabel("V Amplitude")
         if expected_direction:
             plt.text(0.02, 0.9, f"Expected V: {expected_direction.get('expected_v')}", transform=plt.gca().transAxes)
+        if setBreakMarker: #M: mark ending of break (when pressing spacebar) with v line
+            plt.axvspan(endOfBreakTime, startOfBreakTime, color='b', linestyle='--', label='Break Marker', alpha =0.2) #M: alpha=transparency
+            plt.text(startOfBreakTime + (endOfBreakTime-startOfBreakTime)/2, f"Break", ha='center', color= 'b')
+            startOfBreakTime = 0  #M: reset after plotting
+            endOfBreakTime = 0
         plt.legend()
 
         # Mark detection event if available
