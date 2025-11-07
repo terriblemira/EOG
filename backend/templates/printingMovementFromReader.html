@@ -1,3 +1,4 @@
+<!--M: HTML is getting sent to browser=frontend (when user types in URL) but is saved in backend. JavaScript in the HTML is running in frontend and communicating w backend -->
 @app.get("/printingMovementFromReader") <!--M:connection between HTML file and browser; TYPE THIS in Browser to access --> 
 async def create_page_f_realtime_moves():
     return HTMLResponse(content="""
@@ -7,15 +8,23 @@ async def create_page_f_realtime_moves():
   <header>
     <h1>Movement detection from EOG-Reader</h1>
   </header>
-  <main id="movementStatus" style="font-size: 24px; color: purple;">
+  <main id="main_text" style="font-size: 24px; color: purple;">
     Current movement: None detected
   </main>
   <script>
-    const movementWebsocket = new WebSocket(`ws://localhost:8000/wsMovement`); //M: DON'T TYPE this into browser. connection to WebSocket endpoint (@app.websocket("/wsMovement")) in backend (app.py) that sends movement messages
-        
+    console.log("Script is running"); //DEBUG
+    const movementWebsocket = new WebSocket(`ws://localhost:8000/wsMovement`); //M: DON'T TYPE this into browser. connection to WebSocket endpoint (@app.websocket("/wsMovement")) in backend (app.py) that stays open & sends movement messages
+    
+    movementWebsocket.onopen = function() { //DEBUG
+      console.log("WebSocket connection established");
+    }; 
     movementWebsocket.onmessage = function(movementText) { //M: onmessage: triggered when WebSocket receives a message from server(backend). function = JavaSkriptkeyword to say left part is function with parameter movementText in it 
-        document.getElementById("movementStatus").textContent = movementText.data; //M: document = built-in JavaScript object that represents entire HTML webpage loaded in browser. data property of movementText contains actual text message sent from server --> replace part of HTML-page with id"movementStatus" with received text (movementText.data)
+      console.log("Received:", movementText.data); //M: Open console in Browser w f12. Should print this text if message from app.py is received in onmessage function  
+      document.getElementById("main_text").textContent = movementText.data; //M: document = built-in JavaScript object that represents entire HTML webpage loaded in browser. data property of movementText contains actual text message sent from server --> replace part of HTML-page with id"movementStatus" with received text (movementText.data)
     }; //M: text stays until next message from server(backend)
+    movementWebsocket.onerror = function(error) { //DEBUG
+      console.log("WebSocket error:", error);
+    };
   </script>   
 </body>
 </html>

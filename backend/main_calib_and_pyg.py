@@ -403,7 +403,7 @@ def main():
 
 
     finally:
-        eog.stop()
+#        eog.stop()
         save_results(trials, calibration_params) # M: saving of thresholds etc in save_results (csv-file)
         # Display completion message
         window.fill(BG_COLOR)
@@ -415,5 +415,13 @@ def main():
         wait_for_spacebar(window, font, "Task complete! Press SPACEBAR to exit.")
         pygame.quit()
 
-if __name__ == "__main__":
+# #starting EOG for AFTER testing
+#     print(f"Restarting EOG Reader for live detection...")
+#     eog_new = EOGReader(det_queue)
+#     eog_new.calibration_params = calibration_params
+#     eog_new.start()
+
+    return eog
+
+#if __name__ == "__main__":
     main()

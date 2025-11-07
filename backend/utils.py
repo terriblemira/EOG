@@ -64,6 +64,8 @@ def plot_detection_window(
     detection=None,
     calibration_params=None
 ):
+    global startOfBreakTime  #M: to mark breaks in data when spacebar pressed
+    global endOfBreakTime
     """
     Plot smooth detection signals from the EOGReader in a single figure with H and V subplots.
     Saves plots to the same RESULTS_DIR as calibration.py.
