@@ -36,36 +36,39 @@ async def websocket_endpoint(websocket: WebSocket):
         while True: #M: to keep connection alive, attentive for incoming signals from eog_reader.py
             # signal = await websocket.receive_text() #M: wait for a signal from eog_reader.py
             # print(f"Received signal {signal}")
-            counter += 1
-            if counter % 10 == 0:  # Alle 1 Sekunde
-                print(f"Loop running... signal = {eog.signal}")  # DEBUG
+            # counter += 1
+            # if counter % 10 == 0:  # Alle 1 Sekunde
+            #     print(f"Loop running... signal = {eog.signal}")  # DEBUG
+            if not signal.empty():
+                signal = signal.get()
 
-            if EOGReader.signal == "left":
-                print(f"{EOGReader.signal}: Sending 'Left-command received' message to JavaScript")
-                await websocket.send_text("Left-command received")
-                EOGReader.signal = None
-                print("Message sent and signal reset to None")
-            await asyncio.sleep(0.1)
+                if EOGReader.signal == "left":
+                    print(f"{EOGReader.signal}: Sending 'Left-command received' message to JavaScript")
+                    await websocket.send_text("Left-command received")
+                    EOGReader.signal = None
+                    print("Message sent and signal reset to None")
+                # await asyncio.sleep(0.1)
 
-            if EOGReader.signal == "right":
-                print(f"{EOGReader.signal}: Sending 'Right-command received' message to JavaScript")  # DEBUG)
-                await websocket.send_text("Right-command received")
-                EOGReader.signal = None  # Reset signal after processing so does not repeat
-                print("Message sent and signal reset to None")  # DEBUG
-            await asyncio.sleep(0.1) # Small delay
+                if EOGReader.signal == "right":
+                    print(f"{EOGReader.signal}: Sending 'Right-command received' message to JavaScript")  # DEBUG)
+                    await websocket.send_text("Right-command received")
+                    EOGReader.signal = None  # Reset signal after processing so does not repeat
+                    print("Message sent and signal reset to None")  # DEBUG
+                # await asyncio.sleep(0.1) # Small delay
 
-            if EOGReader.signal == "up":
-                print(f"{EOGReader.signal}: Sending 'Up-command received' message to JavaScript")
-                await websocket.send_text("Up-command received")
-                EOGReader.signal = None
-                print("Message sent and signal reset to None")
-            await asyncio.sleep(0.1)
+                if EOGReader.signal == "up":
+                    print(f"{EOGReader.signal}: Sending 'Up-command received' message to JavaScript")
+                    await websocket.send_text("Up-command received")
+                    EOGReader.signal = None
+                    print("Message sent and signal reset to None")
+                # await asyncio.sleep(0.1)
 
-            if EOGReader.signal == "down":
-                print(f"{EOGReader.signal}: Sending 'Down-command received' message to JavaScript")
-                await websocket.send_text("Down-command received")
-                EOGReader.signal = None
-                print("Message sent and signal reset to None")
+                if EOGReader.signal == "down":
+                    print(f"{EOGReader.signal}: Sending 'Down-command received' message to JavaScript")
+                    await websocket.send_text("Down-command received")
+                    EOGReader.signal = None
+                    print("Message sent and signal reset to None")
+                #await asyncio.sleep(0.1)
             await asyncio.sleep(0.1)
 
     except Exception as e_ws_to_JavaScript:

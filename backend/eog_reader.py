@@ -21,7 +21,9 @@ class Detection:
     v_velocity: float = 0.0
 
 class EOGReader(threading.Thread):
-    signal = None #class-level variable to store current movement signal for webapp
+    from queue import Queue
+
+    signal = Queue()
 
     #M: function to "create connection once, put it in self.ws and keep it open"; not running yet, will be called in run()
     # async def connect_to_webapp(self):
@@ -152,10 +154,9 @@ class EOGReader(threading.Thread):
                     if self._push(det): # ...and if cooldown function allows (if outcome is "yes"): do following:
                         print(f"Pushed right detection to queue at {times[idx]:.2f}s") #M: "times[exact sample]:.2f"(rounded to 2 decimals)
                         ##M: MIRA/DARSH: ADDED: give signal to webapp to move (right):
-                        signal = "right"
+                        signal.put("right")
                         print(f"Signal now: {signal}")
                         # self.send_valid_movement() #replace (signal) in "self.send_valid_movement(signal)" with ("right")
-                        continue
 
                 elif h_val > self.calibration_params["thresholds"]["left"] and h_vel > H_VELOCITY_THRESHOLD:
                     det = Detection(
@@ -170,9 +171,9 @@ class EOGReader(threading.Thread):
                     if self._push(det):
                         print(f"Pushed left detection to queue at {times[idx]:.2f}s")
                         ##M: MIRA/DARSH: HERE TO ADD: give signal to webapp to move (left)!
-                        signal = "left"
+                        #signal = "left"
+                        signal.put("left")
                         print(f"Signal now: {signal}")
-                        return signal
                 
                 # Check for vertical movements with velocity and minimum amplitude
                 if v_val < -self.calibration_params["thresholds"]["up"] and v_vel > V_VELOCITY_THRESHOLD:
@@ -188,9 +189,8 @@ class EOGReader(threading.Thread):
                     if self._push(det):
                         print(f"Pushed up detection to queue at {times[idx]:.2f}s")
                         ##M: MIRA/DARSH: HERE TO ADD: give signal to webapp to move (up)!
-                        signal = "up"
+                        signal.put("up")
                         print(f"Signal now: {signal}")
-                        return signal
                     
                 elif v_val > self.calibration_params["thresholds"]["down"] and v_vel > V_VELOCITY_THRESHOLD:
                     det = Detection(
@@ -205,9 +205,8 @@ class EOGReader(threading.Thread):
                     if self._push(det):
                         print(f"Pushed down detection to queue at {times[idx]:.2f}s")
                         ##M: MIRA/DARSH: HERE TO ADD: give signal to webapp to move (down)!
-                        signal = "down"
+                        signal.put("down")
                         print(f"Signal now: {signal}")
-                        return signal
 
         except Exception as e:
             print(f"Error in detection processing: {str(e)}")
