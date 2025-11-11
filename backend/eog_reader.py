@@ -9,6 +9,9 @@ from dataclasses import dataclass
 import asyncio # M:import bc of bool valid...Movement for webapp signal
 import websockets # M:import bc of bool valid...Movement for webapp signal
 #M: ch8 = over eye
+from queue import Queue
+
+signal = Queue()
 
 @dataclass
 class Detection:
@@ -21,9 +24,6 @@ class Detection:
     v_velocity: float = 0.0
 
 class EOGReader(threading.Thread):
-    from queue import Queue
-
-    signal = Queue()
 
     #M: function to "create connection once, put it in self.ws and keep it open"; not running yet, will be called in run()
     # async def connect_to_webapp(self):
@@ -36,8 +36,8 @@ class EOGReader(threading.Thread):
 
     def __init__(self, out_queue, max_queue=50, calibration_params=None): #M: Joses init function
         super().__init__()
-  #      self.ws = None #M: ws = variable for websocket connection that is right now empty (None) and will get filled with await... in connect_to_webapp()
-    #    self.eventLoop = None #M: event loop = "Main Thread" (1st started function when running, in this case "async def main()" in main.py); "Motor" for all asyncio functions; variable eventLoop gets filled with actual event loop in main.py (with eog.loop = asyncio.get_event_loop())
+      #    self.ws = None #M: ws = variable for websocket connection that is right now empty (None) and will get filled with await... in connect_to_webapp()
+      #    self.eventLoop = None #M: event loop = "Main Thread" (1st started function when running, in this case "async def main()" in main.py); "Motor" for all asyncio functions; variable eventLoop gets filled with actual event loop in main.py (with eog.loop = asyncio.get_event_loop())
         self.raw_log = []  # To store raw data if recording is enabled
         self.record_raw = False  # Flag to control raw data recording
         self.out_queue = out_queue
@@ -155,7 +155,7 @@ class EOGReader(threading.Thread):
                         print(f"Pushed right detection to queue at {times[idx]:.2f}s") #M: "times[exact sample]:.2f"(rounded to 2 decimals)
                         ##M: MIRA/DARSH: ADDED: give signal to webapp to move (right):
                         signal.put("right")
-                        print(f"Signal now: {signal}")
+                        print(f"Signal now: {signal.queue}")
                         # self.send_valid_movement() #replace (signal) in "self.send_valid_movement(signal)" with ("right")
 
                 elif h_val > self.calibration_params["thresholds"]["left"] and h_vel > H_VELOCITY_THRESHOLD:
@@ -173,7 +173,7 @@ class EOGReader(threading.Thread):
                         ##M: MIRA/DARSH: HERE TO ADD: give signal to webapp to move (left)!
                         #signal = "left"
                         signal.put("left")
-                        print(f"Signal now: {signal}")
+                        print(f"Signal now: {signal.queue}")
                 
                 # Check for vertical movements with velocity and minimum amplitude
                 if v_val < -self.calibration_params["thresholds"]["up"] and v_vel > V_VELOCITY_THRESHOLD:
@@ -190,7 +190,7 @@ class EOGReader(threading.Thread):
                         print(f"Pushed up detection to queue at {times[idx]:.2f}s")
                         ##M: MIRA/DARSH: HERE TO ADD: give signal to webapp to move (up)!
                         signal.put("up")
-                        print(f"Signal now: {signal}")
+                        print(f"Signal now: {signal.queue}")
                     
                 elif v_val > self.calibration_params["thresholds"]["down"] and v_vel > V_VELOCITY_THRESHOLD:
                     det = Detection(
@@ -206,7 +206,7 @@ class EOGReader(threading.Thread):
                         print(f"Pushed down detection to queue at {times[idx]:.2f}s")
                         ##M: MIRA/DARSH: HERE TO ADD: give signal to webapp to move (down)!
                         signal.put("down")
-                        print(f"Signal now: {signal}")
+                        print(f"Signal now: {signal.queue}")
 
         except Exception as e:
             print(f"Error in detection processing: {str(e)}")
@@ -281,7 +281,7 @@ class EOGReader(threading.Thread):
                     import traceback
                     traceback.print_exc()
                     
-            # Run detection every 0.1 seconds
+            # Run detection every 0.1 seconds (M: not 0.5? see DETECT_PERIOD)
             if (current_time - last_detection_check) >= DETECT_PERIOD and len(self.detect_time_buffer) >= config.DETECT_MAX_SAMPLES:
                 last_detection_check = current_time
                 self.process_detection_window()

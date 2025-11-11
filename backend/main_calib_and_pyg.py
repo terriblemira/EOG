@@ -18,11 +18,15 @@ from utils import wait_for_spacebar, expected_from_name, plot_detection_window, 
 from datetime import datetime
 import os
 
+is_calib_running = False
+
 RESULTS_DIR = os.path.join("results", datetime.now().strftime("%Y%m%d_%H%M%S"))
 os.makedirs(RESULTS_DIR, exist_ok=True)
 
 
 def run_calibration(eog_reader, window, font, calibration_sequence, clock):
+    global is_calib_running
+    is_calib_running = True
     """Run calibration to determine baselines and thresholds"""
     # Data structure to store raw signals for each direction
     calibration_data = {
@@ -135,6 +139,7 @@ def run_calibration(eog_reader, window, font, calibration_sequence, clock):
     }
 
     plot_calibration_signals(calibration_data, channel_norm_factors, baselines, formatted_thresholds, alpha)
+    is_calib_running = False
 
     return {
         "baselines": baselines,
@@ -212,21 +217,21 @@ def main():
 
     # Initialize EOG reader
     det_queue = collections.deque(maxlen=50)
-    eog = EOGReader(det_queue)
+    eog_thread = EOGReader(det_queue) #creating an instance of EOGReader class with det_queue as argument (used in the __init__ method (--> variable self.out_queue IS det_queue for this EOGReader instance (for eog_thread).)
     #M added:
     #M:MAYBE back in: eog.eventLoop = asyncio.get_event_loop() #M: Websocket Setup
     #await eog.connect_to_webapp() #M: verbindet & hält Verbindung zu app.py
-    eog.start() #M: start eog_reader (thread) with default calibration_params (default thresholds, etc.)
+    eog_thread.start() #M: start eog_reader (thread) with default calibration_params (default thresholds, etc.)
 
     # Run calibration
 
-    eog.raw_log = []
-    eog.record_raw = True
-    calibration_params = run_calibration(eog, window, font, calibration_sequence, clock) #runs function with parameters in brackets and saves outcome as "(main_calib_and_pyg.)calibration_params" (eog.calibration_params not changed yet!)
-    eog.record_raw = False
-    eog.save_raw_data(os.path.join(RESULTS_DIR, "calibration_raw_signals.csv"))
+    eog_thread.raw_log = []
+    eog_thread.record_raw = True
+    calibration_params = run_calibration(eog_thread, window, font, calibration_sequence, clock) #runs function with parameters in brackets and saves outcome as "(main_calib_and_pyg.)calibration_params" (eog.calibration_params not changed yet!)
+    eog_thread.record_raw = False
+    eog_thread.save_raw_data(os.path.join(RESULTS_DIR, "calibration_raw_signals.csv"))
     #samples, timestamps = eog.inlet.pull_chunk(timeout=0.01)
-    eog.calibration_params = calibration_params # Update calibration params in EOG Reader from default to new
+    eog_thread.calibration_params = calibration_params # Update calibration params in EOG Reader from default to new
     #M: idea for saved csv instead of live: from utils import startOfBreakingTime, endOfBreakingTime) "while startOfBreakingTime is not 0: get startOfBreakingTime" - startofBreakingTime and save in csv alongside raw data"
     print(f"\nCalibration complete:")
     print(f"Baselines: {calibration_params['baselines']}")
@@ -339,7 +344,7 @@ def main():
 
                 # Plot the detection window for this step (M: for the test)
                 plot_detection_window(
-                    eog_reader=eog,
+                    eog_reader=eog_thread,
                     step_index=step_index,
                     target_name=sequence[step_index][0],
                     expected_direction=current_expected,
@@ -403,7 +408,7 @@ def main():
 
 
     finally:
-#        eog.stop()
+#        eog_thread.stop()
         save_results(trials, calibration_params) # M: saving of thresholds etc in save_results (csv-file)
         # Display completion message
         window.fill(BG_COLOR)
@@ -421,7 +426,7 @@ def main():
 #     eog_new.calibration_params = calibration_params
 #     eog_new.start()
 
-    return eog
+    return eog_thread
 
 #if __name__ == "__main__":
     main()

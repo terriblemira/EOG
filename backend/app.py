@@ -1,6 +1,6 @@
 # backend/app.py
-#M: Webbrowser: Forbidden to browser to directly coonects to backend (CORS policy), so app.py acts as intermediary between browser and backend (eog_reader.py)
-#M: TYPE in conda (under New Terminal --> Command prompt): cd C:\Users\mirad\GIT\EOG-1\backend --> ENTER --> python -m uvicorn app:app --reload
+#M: Webbrowser: Forbidden to browser to directly coonect to backend (CORS policy), so app.py acts as intermediary between browser and backend (eog_reader.py)
+#M: If separate start (from main.py): TYPE in conda (under New Terminal --> Command prompt): cd C:\Users\mirad\GIT\EOG-1\backend --> ENTER --> python -m uvicorn app:app --reload
 #M: to check if WS connection is established: open console/network with f12 once webpage open
 import asyncio
 from pathlib import Path
@@ -11,9 +11,9 @@ from fastapi.templating import Jinja2Templates # fastAPI uses Jinja2 for renderi
 from stream import get_stream_inlet, has_lsl_stream
 from signal_interpret import SignalInterpreter, CalibrationConfig   # <-- add CalibrationConfig
 from calibration_placeh import CalibrationSession
-import eog_reader as eog
-from eog_reader import EOGReader
-
+import eog_reader
+import main_calib_and_pyg as main_c_and_p
+from queue import Queue
 
 BASE_DIR = Path(__file__).resolve().parent
 app = FastAPI(title="Game Glasses")
@@ -34,51 +34,34 @@ async def websocket_endpoint(websocket: WebSocket):
     try:
         counter = 0
         while True: #M: to keep connection alive, attentive for incoming signals from eog_reader.py
-            # signal = await websocket.receive_text() #M: wait for a signal from eog_reader.py
-            # print(f"Received signal {signal}")
-            # counter += 1
-            # if counter % 10 == 0:  # Alle 1 Sekunde
-            #     print(f"Loop running... signal = {eog.signal}")  # DEBUG
-            if not signal.empty():
-                signal = signal.get()
-
-                if EOGReader.signal == "left":
-                    print(f"{EOGReader.signal}: Sending 'Left-command received' message to JavaScript")
+            counter += 1
+            if counter % 10 == 0:  # Alle 1 Sekunde
+                 is_empty = eog_reader.signal.empty() #DEBUG
+                 queue_size = eog_reader.signal.qsize() #DEBUG
+                 print(f"Loop {counter} running: Queue empty={is_empty}, size={queue_size}")  # DEBUG
+                 print(f"signal queue contents (directions): {list(eog_reader.signal.queue)}")  # DEBUG
+            
+            if not eog_reader.signal.empty():
+                #and main_c_and_p.is_calib_running == True:
+                direction = eog_reader.signal.get()
+                print(f"direction received: {direction}")
+                if direction == "left":
+                    print(f"{direction}: Sending 'Left-direction received' message to JavaScript")
                     await websocket.send_text("Left-command received")
-                    EOGReader.signal = None
-                    print("Message sent and signal reset to None")
-                # await asyncio.sleep(0.1)
-
-                if EOGReader.signal == "right":
-                    print(f"{EOGReader.signal}: Sending 'Right-command received' message to JavaScript")  # DEBUG)
+                elif direction == "right":
+                    print(f"{direction}: Sending 'Right-direction received' message to JavaScript")  # DEBUG)
                     await websocket.send_text("Right-command received")
-                    EOGReader.signal = None  # Reset signal after processing so does not repeat
-                    print("Message sent and signal reset to None")  # DEBUG
-                # await asyncio.sleep(0.1) # Small delay
-
-                if EOGReader.signal == "up":
-                    print(f"{EOGReader.signal}: Sending 'Up-command received' message to JavaScript")
+                elif direction == "up":
+                    print(f"{direction}: Sending 'Up-direction received' message to JavaScript")
                     await websocket.send_text("Up-command received")
-                    EOGReader.signal = None
-                    print("Message sent and signal reset to None")
-                # await asyncio.sleep(0.1)
-
-                if EOGReader.signal == "down":
-                    print(f"{EOGReader.signal}: Sending 'Down-command received' message to JavaScript")
+                elif direction == "down":
+                    print(f"{direction}: Sending 'Down-direction received' message to JavaScript")
                     await websocket.send_text("Down-command received")
-                    EOGReader.signal = None
-                    print("Message sent and signal reset to None")
-                #await asyncio.sleep(0.1)
-            await asyncio.sleep(0.1)
-
+            else:
+                await websocket.send_text("empty signal queue")
+            await asyncio.sleep(1) # M: eventually remove/make shorter
     except Exception as e_ws_to_JavaScript:
         print(f"Error in websocket endpoint: {e_ws_to_JavaScript}")
-
-#M:TODO: Hier an Browser weiterleiten (mit template??)            
-            # elif signal == "left":
-            #     print("Move left command received. This could be action instead of text")
-            # ...
-
     except WebSocketDisconnect:
         print("WebSocket to EOG disconnected")
 

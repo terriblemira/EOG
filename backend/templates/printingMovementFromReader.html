@@ -20,8 +20,10 @@ async def create_page_f_realtime_moves():
     }; 
     movementWebsocket.onmessage = function(movementText) { //M: onmessage: triggered when WebSocket receives a message from server(backend). function = JavaSkriptkeyword to say left part is function with parameter movementText in it 
       console.log("Received:", movementText.data); //M: Open console in Browser w f12. Should print this text if message from app.py is received in onmessage function  
-      document.getElementById("main_text").textContent = movementText.data; //M: document = built-in JavaScript object that represents entire HTML webpage loaded in browser. data property of movementText contains actual text message sent from server --> replace part of HTML-page with id"movementStatus" with received text (movementText.data)
+      const mainTextElement = document.getElementById("main_text"); //M: document = built-in JavaScript object that represents entire HTML webpage loaded in browser. data property of movementText contains actual text message sent from server --> replace part of HTML-page with id"movementStatus" with received text (movementText.data)
+      mainTextElement.textContent = "Current movement: " + movementText.data;
     }; //M: text stays until next message from server(backend)
+    
     movementWebsocket.onerror = function(error) { //DEBUG
       console.log("WebSocket error:", error);
     };
