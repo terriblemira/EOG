@@ -19,6 +19,10 @@
   let score = 0;
   let tickMs = 180;                   // game speed (lower = faster)
 
+  //M: Websocket-connection
+  let ws = null;
+
+
   // Prevent reversals
   function setDirection(cmd) {
     if (!cmd) return;
@@ -36,31 +40,51 @@
     if (e.key === "ArrowDown")  setDirection("down");
   });
 
-  // WebSocket for commands
-  function setConnStatus(text, ok=false, bad=false) {
-    connEl.textContent = text;
-    connEl.className = "status " + (ok ? "status-ok" : bad ? "status-fail" : "status-waiting");
-  }
-
-  function connectCmdWS() {
-    setConnStatus("Connecting…");
-    const ws = new WebSocket(`ws://${location.host}/ws/cmd`);
-    ws.onopen = () => setConnStatus("Connected", true);
-    ws.onmessage = (e) => {
-      try {
-        const msg = JSON.parse(e.data);
-        if (msg && msg.cmd) {
-          lastEl.textContent = msg.cmd;
-          setDirection(msg.cmd);
-        }
-      } catch {
-        // Ignore non-JSON notices like "LSL:connected"
-      }
+  function connectWebSocket() {
+    // connect Websocket to /wsMovement endpoint (in app.py)
+    ws = new WebSocket('ws://localhost:8000/wsMovement');
+    
+    ws.onopen = function() {
+        console.log('WebSocket verbunden zu /wsMovement');
+        statusDiv.textContent = 'Connected';
+        statusDiv.className = 'status status-connected';
     };
-    ws.onclose = () => { setConnStatus("Disconnected — retrying…", false, true); setTimeout(connectCmdWS, 500); };
-    ws.onerror = () => setConnStatus("WS error", false, true);
-  }
-  connectCmdWS();
+    
+    ws.onmessage = function(event) {
+        const message = event.data;
+        console.log('Received:', message);
+        
+        // M: transform only relevant signals to events 
+        if (message === "Right-command received") {
+            setDirection("left");
+            lastCmdDiv.textContent = 'RIGHT';
+        } else if (message === "Left-command received") {
+            setDirection("right");
+            lastCmdDiv.textContent = 'LEFT';
+        } else if (message === "Up-command received") {
+            setDirection("up");
+            lastCmdDiv.textContent = 'UP';
+        } else if (message === "Down-command received") {
+            setDirection("down");
+            lastCmdDiv.textContent = 'DOWN';
+        }
+    };
+    
+    ws.onerror = function(error) {
+        console.error('WebSocket Fehler:', error);
+        statusDiv.textContent = 'Error';
+        statusDiv.className = 'status status-error';
+    };
+    
+    ws.onclose = function() {
+        console.log('WebSocket geschlossen');
+        statusDiv.textContent = 'Disconnected';
+        statusDiv.className = 'status status-waiting';
+        
+        //M: Auto-Reconnect after 3 secs
+        setTimeout(connectWebSocket, 3000);
+    };
+}
 
   // Game loop
   let lastTick = 0;

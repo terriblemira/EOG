@@ -6,7 +6,7 @@ import matplotlib
 matplotlib.use('Agg')   # <-- non-interactive backend safe for threads & headless envs
 import matplotlib.pyplot as plt
 from datetime import datetime
-from config import DEBUG_PLOTS, BG_COLOR, BLACK, PLOT_BUFFER_DURATION
+from config import DEBUG_PLOTS, BG_COLOR, BLACK, PLOT_BUFFER_DURATION, BLINK_THRESHOLD
 # Create a shared, date-stamped results folder
 from datetime import datetime
 from config import RESULTS_DIR
@@ -99,7 +99,7 @@ def plot_detection_window(
         ch1 = np.array(eog_reader.channel_buffers[0])
         ch2 = np.array(eog_reader.channel_buffers[1])
         ch3 = np.array(eog_reader.channel_buffers[2])
-        ch8 = np.array(eog_reader.channel_buffers[7])
+        ch5 = np.array(eog_reader.channel_buffers[7])
 
         # Use calibration or defaults
         cal = calibration_params or eog_reader.calibration_params
@@ -112,11 +112,11 @@ def plot_detection_window(
         ch1 = process_signal(ch1, 250, "ch1") / norm["ch1"]
         ch2 = process_signal(ch2, 250, "ch2") / norm["ch2"]
         ch3 = process_signal(ch3, 250, "ch3") / norm["ch3"]
-        ch8 = process_signal(ch8, 250, "ch8") / norm["ch8"]
+        ch5 = process_signal(ch5, 250, "ch5") / norm["ch5"]
 
         # Compute H/V and compensation
         H = (ch1 - ch3) - baselines["H"]
-        V = (ch8 - ch2) - baselines["V"]
+        V = (ch5 - ch2) - baselines["V"]
         V_comp = V - alpha * H
 
         # Smooth with interpolation
@@ -138,9 +138,9 @@ def plot_detection_window(
         plt.ylabel("H Amplitude")
         if expected_direction:
             plt.text(0.02, 0.9, f"Expected H: {expected_direction.get('expected_h')}", transform=plt.gca().transAxes)
-        if setBreakMarker: #M: mark ending of break (when pressing spacebar) with v line
-            plt.axvspan(startOfBreakTime, endOfBreakTime, color='b', linestyle='--', label='Break Marker', alpha =0.2)
-            plt.text(startOfBreakTime + (endOfBreakTime-startOfBreakTime)/2, f"Break", ha='center', color= 'b')
+        # if setBreakMarker: #M: mark ending of break (when pressing spacebar) with v line
+        #     plt.axvspan(startOfBreakTime, endOfBreakTime, color='b', linestyle='--', label='Break Marker', alpha =0.2)
+        #     plt.text(startOfBreakTime + (endOfBreakTime-startOfBreakTime)/2, f"Break", ha='center', color= 'b')
         plt.legend()
 
         # V plot
@@ -152,11 +152,6 @@ def plot_detection_window(
         plt.ylabel("V Amplitude")
         if expected_direction:
             plt.text(0.02, 0.9, f"Expected V: {expected_direction.get('expected_v')}", transform=plt.gca().transAxes)
-        if setBreakMarker: #M: mark ending of break (when pressing spacebar) with v line
-            plt.axvspan(endOfBreakTime, startOfBreakTime, color='b', linestyle='--', label='Break Marker', alpha =0.2) #M: alpha=transparency
-            plt.text(startOfBreakTime + (endOfBreakTime-startOfBreakTime)/2, f"Break", ha='center', color= 'b')
-            startOfBreakTime = 0  #M: reset after plotting
-            endOfBreakTime = 0
         plt.legend()
 
         # Mark detection event if available
@@ -200,17 +195,13 @@ def save_results(trials, calibration_params, out_path=None):
         with open(out_path, "w", newline="", encoding="utf-8") as f:
             writer = csv.DictWriter(f, fieldnames=[
                 "step_index", "target_name", "expected_h", "expected_v",
-                "detected_h", "detected_v", "ts_detected_h", "ts_detected_v",
-                "correct", "h_value_h", "v_value_h", "h_value_v", "v_value_v",
-                "h_velocity_h", "v_velocity_h", "h_velocity_v", "v_velocity_v",
-                "h_value_max", "h_value_min", "v_value_max", "v_value_min",
-                "h_threshold_left", "h_threshold_right", "v_threshold_up", "v_threshold_down"
+                "detected_h", "detected_v", "is_blink", "blink_duration",
+                "correct", "blink_threshold"
             ])
             writer.writeheader()
 
             # Write each trial
             for trial in trials:
-                # Create a clean row with proper handling of None values
                 clean_row = {
                     "step_index": trial.get("step_index", ""),
                     "target_name": trial.get("target_name", ""),
@@ -218,25 +209,8 @@ def save_results(trials, calibration_params, out_path=None):
                     "expected_v": trial.get("expected_v", ""),
                     "detected_h": trial.get("detected_h", ""),
                     "detected_v": trial.get("detected_v", ""),
-                    "ts_detected_h": trial.get("ts_detected_h", ""),
-                    "ts_detected_v": trial.get("ts_detected_v", ""),
+                    "is_blink": trial.get("is_blink", False),
                     "correct": trial.get("correct", ""),
-                    "h_value_h": trial.get("h_value_h", 0),
-                    "v_value_h": trial.get("v_value_h", 0),
-                    "h_value_v": trial.get("h_value_v", 0),
-                    "v_value_v": trial.get("v_value_v", 0),
-                    "h_velocity_h": trial.get("h_velocity_h", 0),
-                    "v_velocity_h": trial.get("v_velocity_h", 0),
-                    "h_velocity_v": trial.get("h_velocity_v", 0),
-                    "v_velocity_v": trial.get("v_velocity_v", 0),
-                    "h_value_max": trial.get("h_value_max", 0),
-                    "h_value_min": trial.get("h_value_min", 0),
-                    "v_value_max": trial.get("v_value_max", 0),
-                    "v_value_min": trial.get("v_value_min", 0),
-                    "h_threshold_left": trial.get("h_threshold_left", 0),
-                    "h_threshold_right": trial.get("h_threshold_right", 0),
-                    "v_threshold_up": trial.get("v_threshold_up", 0),
-                    "v_threshold_down": trial.get("v_threshold_down", 0)
                 }
                 writer.writerow(clean_row)
 
@@ -254,6 +228,7 @@ def save_results(trials, calibration_params, out_path=None):
                 "target_name": "THRESHOLDS",
                 "expected_h": f"Left: {calibration_params['thresholds']['left']:.4f}, Right: {calibration_params['thresholds']['right']:.4f}",
                 "expected_v": f"Up: {calibration_params['thresholds']['up']:.4f}, Down: {calibration_params['thresholds']['down']:.4f}",
+                "blink_threshold": f"Blink: {calibration_params.get('blink_threshold', BLINK_THRESHOLD):.4f}"
             })
 
         print(f"Successfully saved results to {out_path}")

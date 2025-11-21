@@ -35,7 +35,7 @@ async def websocket_endpoint(websocket: WebSocket):
         counter = 0
         while True: #M: to keep connection alive, attentive for incoming signals from eog_reader.py
             counter += 1
-            if counter % 10 == 0:  # Alle 1 Sekunde
+            if counter % 10 == 0:  # every 1 second
                  is_empty = eog_reader.signal.empty() #DEBUG
                  queue_size = eog_reader.signal.qsize() #DEBUG
                  print(f"Loop {counter} running: Queue empty={is_empty}, size={queue_size}")  # DEBUG
@@ -57,39 +57,43 @@ async def websocket_endpoint(websocket: WebSocket):
                 elif direction == "down":
                     print(f"{direction}: Sending 'Down-direction received' message to JavaScript")
                     await websocket.send_text("Down-command received")
+                elif direction == "blink":
+                    print(f"{direction}: Sending 'BLINK' message to JavaScript")
+                    await websocket.send_text("BLINK")
             else:
                 await websocket.send_text("empty signal queue")
-            await asyncio.sleep(1) # M: eventually remove/make shorter
+            await asyncio.sleep(0.1) # M: eventually remove/make shorter
     except Exception as e_ws_to_JavaScript:
         print(f"Error in websocket endpoint: {e_ws_to_JavaScript}")
     except WebSocketDisconnect:
         print("WebSocket to EOG disconnected")
 
-# # ---------- Pages ----------
-# @app.get("/", response_class=HTMLResponse)
-# def signal_check(request: Request): #request = "note that client brings in" (f.ex. header, cookies, 
-#     return templates.TemplateResponse("signal.html", {"request": request})
 
-# @app.get("/index", response_class=HTMLResponse)
-# def index(request: Request):
-#     return templates.TemplateResponse("index.html", {"request": request})
+# ---------- Pages ----------
+@app.get("/", response_class=HTMLResponse)
+def signal_check(request: Request): #request = "note that client brings in" (f.ex. header, cookies, 
+    return templates.TemplateResponse("signal.html", {"request": request})
 
-# @app.get("/calibrate", response_class=HTMLResponse)
-# def calibrate(request: Request):
-#     print("calibrate here")
-#     return templates.TemplateResponse("calibrate.html", {"request": request})
+@app.get("/index", response_class=HTMLResponse)
+def index(request: Request):
+    return templates.TemplateResponse("index.html", {"request": request})
 
-# @app.get("/games", response_class=HTMLResponse)
-# def games(request: Request):
-#     return templates.TemplateResponse("games.html", {"request": request})
+@app.get("/calibrate", response_class=HTMLResponse)
+def calibrate(request: Request):
+    print("calibrate here")
+    return templates.TemplateResponse("calibrate.html", {"request": request})
 
-# @app.get("/snake", response_class=HTMLResponse)
-# def snake(request: Request):
-#     return templates.TemplateResponse("snake.html", {"request": request})
+@app.get("/games", response_class=HTMLResponse)
+def games(request: Request):
+    return templates.TemplateResponse("games.html", {"request": request})
 
-# @app.get("/pong", response_class=HTMLResponse)
-# def pong(request: Request):
-#     return templates.TemplateResponse("pong.html", {"request": request})
+@app.get("/snake", response_class=HTMLResponse)
+def snake(request: Request):
+    return templates.TemplateResponse("snake.html", {"request": request})
+
+@app.get("/pong", response_class=HTMLResponse)
+def pong(request: Request):
+    return templates.TemplateResponse("pong.html", {"request": request})
 
 
 # # ---------- API for signal presence ----------

@@ -11,14 +11,13 @@ from calibration import (
     calculate_channel_norm_factor,
     calculate_direction_thresholds,
     plot_calibration_signals,
-    calculate_alpha
+    calculate_alpha,
+    run_blink_calibration
 )
 from utils import wait_for_spacebar, expected_from_name, plot_detection_window, save_results
 # Create a shared, date-stamped results folder
 from datetime import datetime
 import os
-
-is_calib_running = False
 
 RESULTS_DIR = os.path.join("results", datetime.now().strftime("%Y%m%d_%H%M%S"))
 os.makedirs(RESULTS_DIR, exist_ok=True)
@@ -30,11 +29,11 @@ def run_calibration(eog_reader, window, font, calibration_sequence, clock):
     """Run calibration to determine baselines and thresholds"""
     # Data structure to store raw signals for each direction
     calibration_data = {
-        "left": {"ch1": [], "ch2": [], "ch3": [], "ch8": []},
-        "right": {"ch1": [], "ch2": [], "ch3": [], "ch8": []},
-        "up": {"ch1": [], "ch2": [], "ch3": [], "ch8": []},
-        "down": {"ch1": [], "ch2": [], "ch3": [], "ch8": []},
-        "center": {"ch1": [], "ch2": [], "ch3": [], "ch8": []}
+        "left": {"ch1": [], "ch2": [], "ch3": [], "ch5": []},
+        "right": {"ch1": [], "ch2": [], "ch3": [], "ch5": []},
+        "up": {"ch1": [], "ch2": [], "ch3": [], "ch5": []},
+        "down": {"ch1": [], "ch2": [], "ch3": [], "ch5": []},
+        "center": {"ch1": [], "ch2": [], "ch3": [], "ch5": []}
     }
 
     # Clear the detection queue
@@ -45,7 +44,7 @@ def run_calibration(eog_reader, window, font, calibration_sequence, clock):
         return {
             "baselines": {"H": 0, "V": 0},
             "thresholds": {"left": 0.1, "right": 0.1, "up": 0.1, "down": 0.1},
-            "channel_norm_factors": {"ch1": 1, "ch2": 1, "ch3": 1, "ch8": 1},
+            "channel_norm_factors": {"ch1": 1, "ch2": 1, "ch3": 1, "ch5": 1},
             "alpha": 0.0
         }
 
@@ -63,7 +62,7 @@ def run_calibration(eog_reader, window, font, calibration_sequence, clock):
                 return {
                     "baselines": {"H": 0, "V": 0},
                     "thresholds": {"left": 0.1, "right": 0.1, "up": 0.1, "down": 0.1},
-                    "channel_norm_factors": {"ch1": 1, "ch2": 1, "ch3": 1, "ch8": 1}
+                    "channel_norm_factors": {"ch1": 1, "ch2": 1, "ch3": 1, "ch5": 1}
                 }
 
         # Show the target
@@ -84,7 +83,7 @@ def run_calibration(eog_reader, window, font, calibration_sequence, clock):
         step_samples_ch1 = []
         step_samples_ch2 = []
         step_samples_ch3 = []
-        step_samples_ch8 = []
+        step_samples_ch5 = []
 
         print(f"Recording {target_name} for 3 seconds...")
         sample_count = 0
@@ -95,18 +94,18 @@ def run_calibration(eog_reader, window, font, calibration_sequence, clock):
                 step_samples_ch1.extend(samples[:, 0])
                 step_samples_ch2.extend(samples[:, 1])
                 step_samples_ch3.extend(samples[:, 2])
-                step_samples_ch8.extend(samples[:, 7])
+                step_samples_ch5.extend(samples[:, 7])
             pygame.event.pump()
 
 
         print(f"Recorded {len(step_samples_ch1)} samples for {target_name}")
 
         # Store the full arrays for this step
-        if step_samples_ch1 and step_samples_ch2 and step_samples_ch3 and step_samples_ch8:
+        if step_samples_ch1 and step_samples_ch2 and step_samples_ch3 and step_samples_ch5:
             calibration_data[target_key]["ch1"].append(np.array(step_samples_ch1))
             calibration_data[target_key]["ch2"].append(np.array(step_samples_ch2))
             calibration_data[target_key]["ch3"].append(np.array(step_samples_ch3))
-            calibration_data[target_key]["ch8"].append(np.array(step_samples_ch8))
+            calibration_data[target_key]["ch5"].append(np.array(step_samples_ch5))
         else:
             print(f"WARNING: No samples collected for {target_name}!")
 
@@ -115,12 +114,12 @@ def run_calibration(eog_reader, window, font, calibration_sequence, clock):
         "ch1": calculate_channel_norm_factor(calibration_data, "ch1"),
         "ch2": calculate_channel_norm_factor(calibration_data, "ch2"),
         "ch3": calculate_channel_norm_factor(calibration_data, "ch3"),
-        "ch8": calculate_channel_norm_factor(calibration_data, "ch8")
+        "ch5": calculate_channel_norm_factor(calibration_data, "ch5")
     }
 
     print(f"\nChannel normalization factors: "
           f"ch1={channel_norm_factors['ch1']:.2f}, ch2={channel_norm_factors['ch2']:.2f}, "
-          f"ch3={channel_norm_factors['ch3']:.2f}, ch8={channel_norm_factors['ch8']:.2f}")
+          f"ch3={channel_norm_factors['ch3']:.2f}, ch5={channel_norm_factors['ch5']:.2f}")
 
     # Calculate baselines from normalized signals
     H_baseline = calculate_normalized_baseline(calibration_data, channel_norm_factors, "H")
@@ -230,9 +229,19 @@ def main():
     calibration_params = run_calibration(eog_thread, window, font, calibration_sequence, clock) #runs function with parameters in brackets and saves outcome as "(main_calib_and_pyg.)calibration_params" (eog.calibration_params not changed yet!)
     eog_thread.record_raw = False
     eog_thread.save_raw_data(os.path.join(RESULTS_DIR, "calibration_raw_signals.csv"))
-    #samples, timestamps = eog.inlet.pull_chunk(timeout=0.01)
-    eog_thread.calibration_params = calibration_params # Update calibration params in EOG Reader from default to new
+    #samples, timestamps = eog_thread.inlet.pull_chunk(timeout=0.01)
+    #eog_thread.calibration_params = calibration_params # Update calibration params in EOG Reader from default to new
     #M: idea for saved csv instead of live: from utils import startOfBreakingTime, endOfBreakingTime) "while startOfBreakingTime is not 0: get startOfBreakingTime" - startofBreakingTime and save in csv alongside raw data"
+    
+    eog_thread.out_queue.clear()
+    eog_thread.raw_log = []
+    eog_thread.record_raw = True
+    blink_calibration_results = run_blink_calibration(eog_thread, window, font, clock, calibration_params)
+    eog_thread.record_raw = False
+    eog_thread.save_raw_data(os.path.join(RESULTS_DIR, "blink_calibration_raw_signals.csv"))
+    calibration_params['blink_threshold'] = blink_calibration_results['blink_threshold']
+    eog_thread.calibration_params = calibration_params # Update calibration params in EOG Reader from default to new
+
     print(f"\nCalibration complete:")
     print(f"Baselines: {calibration_params['baselines']}")
     print(f"Thresholds: {calibration_params['thresholds']}")
@@ -251,6 +260,8 @@ def main():
     step_min_h = float('inf')
     step_max_v = -float('inf')
     step_min_v = float('inf')
+    eog_thread.raw_log = []
+    eog_thread.record_raw = True
 
     # Initialize scoring
     trials = []
@@ -319,26 +330,10 @@ def main():
                     "expected_v": current_expected["expected_v"],
                     "detected_h": first_h_det.direction if first_h_det is not None else None,
                     "detected_v": first_v_det.direction if first_v_det is not None else None,
-                    "ts_detected_h": float(first_h_det.ts) if first_h_det is not None else None,
-                    "ts_detected_v": float(first_v_det.ts) if first_v_det is not None else None,
+                    "is_blink": first_h_det.is_blink if first_h_det is not None and first_h_det.is_blink else
+                            (first_v_det.is_blink if first_v_det is not None and first_v_det.is_blink else False),
                     "correct": is_correct if (first_h_det is not None or first_v_det is not None) else
                             (current_expected["expected_h"] is None and current_expected["expected_v"] is None),
-                    "h_value_h": first_h_det.h_value if first_h_det is not None else 0,
-                    "v_value_h": first_h_det.v_value if first_h_det is not None else 0,
-                    "h_value_v": first_v_det.h_value if first_v_det is not None else 0,
-                    "v_value_v": first_v_det.v_value if first_v_det is not None else 0,
-                    "h_velocity_h": first_h_det.h_velocity if first_h_det is not None else 0,
-                    "v_velocity_h": first_h_det.v_velocity if first_h_det is not None else 0,
-                    "h_velocity_v": first_v_det.h_velocity if first_v_det is not None else 0,
-                    "v_velocity_v": first_v_det.v_velocity if first_v_det is not None else 0,
-                    "h_value_max": step_max_h,
-                    "h_value_min": step_min_h,
-                    "v_value_max": step_max_v,
-                    "v_value_min": step_min_v,
-                    "h_threshold_left": calibration_params['thresholds']['left'],
-                    "h_threshold_right": calibration_params['thresholds']['right'],
-                    "v_threshold_up": calibration_params['thresholds']['up'],
-                    "v_threshold_down": calibration_params['thresholds']['down']
                 }
                 trials.append(trial_data)
 
@@ -409,6 +404,8 @@ def main():
 
     finally:
 #        eog_thread.stop()
+        eog_thread.record_raw = False
+        eog_thread.save_raw_data(os.path.join(RESULTS_DIR, "main_task_raw_signals.csv"))
         save_results(trials, calibration_params) # M: saving of thresholds etc in save_results (csv-file)
         # Display completion message
         window.fill(BG_COLOR)

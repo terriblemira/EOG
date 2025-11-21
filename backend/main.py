@@ -18,7 +18,7 @@ async def main():
     # Run calibration; before starting EOG reader to have calibration params ready
     appy_thread = threading.Thread(target=start_appy, daemon=True) #M: app.py (opening + running of webpage) as separate thread (running paralllel to eog_reader); "daemon=True": background thread, so automatically stops when main program is stopped
     appy_thread.start()
-    print(f"FastAPI started")
+    print(f"FastAPI started") 
     await asyncio.sleep(1)
 
     webbrowser.open("http://localhost:8000/printingMovementFromReader")
