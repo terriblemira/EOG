@@ -25,7 +25,7 @@ PLOT_MAX_SAMPLES = FS * PLOT_BUFFER_DURATION
 DETECT_WINDOW_DURATION = 0.5 # size of window in which signal is processed at once (!! attention: should be smaller than cooldown, so not same signal being shown twice/more)
 DETECT_MAX_SAMPLES = int(FS * DETECT_WINDOW_DURATION) #no commas
 TOTAL_CHANNELS = 8
-CHANNEL_INDICES = [0, 1, 2, 7]  # (we'll form H = ch1 - ch3, V = ch5 - ch2)
+CHANNEL_INDICES = [0, 1, 2, 4]  # (we'll form H = ch1 - ch3, V = ch5 - ch2)
 LOWCUT = 0.5  # frequencies for the bandpass filter (filters out everything below 0.5 and above 15 Hz) (0.1 to 0.4 to exclude possible slow drift)
 HIGHCUT = 15
 FILTER_ORDER = 2 # how "strictly" it cuts the excluded frequencies out (bandpass filter not perfect, always lets some "forbidden frequencies" slide through) (the higher the stricter)!!if too high: phases get messed up (like cutting parts out of sin/cos)

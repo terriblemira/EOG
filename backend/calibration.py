@@ -272,7 +272,6 @@ def plot_alpha_optimization(alphas, variances, optimal_alpha, H, V):
 
         # Plot H and V signals with optimal compensation
         plt.subplot(2, 1, 2)
-        plt.plot(H, label='H signal')
         plt.plot(V, label='V signal (uncompensated)')
         plt.plot(V - optimal_alpha * H, label=f'V signal (α={optimal_alpha:.2f})')
         plt.title("Signal Comparison with Optimal Alpha Compensation")
@@ -653,7 +652,7 @@ def run_blink_calibration(eog_reader, window, font, clock, calibration_params):
             all_ch1.extend(samples[:, 0])
             all_ch2.extend(samples[:, 1])
             all_ch3.extend(samples[:, 2])
-            all_ch5.extend(samples[:, 7])
+            all_ch5.extend(samples[:, 4])
             all_times.extend([time.time() - start_time] * len(samples))
 
         pygame.event.pump()
