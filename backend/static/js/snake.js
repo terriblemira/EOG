@@ -22,7 +22,6 @@
   //M: Websocket-connection
   let ws = null;
 
-
   // Prevent reversals
   function setDirection(cmd) {
     if (!cmd) return;
@@ -46,8 +45,7 @@
     
     ws.onopen = function() {
         console.log('WebSocket verbunden zu /wsMovement');
-        statusDiv.textContent = 'Connected';
-        statusDiv.className = 'status status-connected';
+        setConnStatus("Connected", true, false)
     };
     
     ws.onmessage = function(event) {
@@ -56,38 +54,48 @@
         
         // M: transform only relevant signals to events 
         if (message === "Right-command received") {
-            setDirection("left");
-            lastCmdDiv.textContent = 'RIGHT';
-        } else if (message === "Left-command received") {
             setDirection("right");
-            lastCmdDiv.textContent = 'LEFT';
+            lastEl.textContent = 'RIGHT';
+        } else if (message === "Left-command received") {
+            setDirection("left");
+            lastEl.textContent = 'LEFT';
         } else if (message === "Up-command received") {
             setDirection("up");
-            lastCmdDiv.textContent = 'UP';
+            lastEl.textContent = 'UP';
         } else if (message === "Down-command received") {
             setDirection("down");
-            lastCmdDiv.textContent = 'DOWN';
+            lastEl.textContent = 'DOWN';
+        } else if (message === "BLINK") {
+            lastEl.textContent = 'BLINK';
         }
     };
     
     ws.onerror = function(error) {
         console.error('WebSocket Fehler:', error);
-        statusDiv.textContent = 'Error';
-        statusDiv.className = 'status status-error';
+        setConnStatus("Error", false, true);
     };
     
     ws.onclose = function() {
         console.log('WebSocket geschlossen');
-        statusDiv.textContent = 'Disconnected';
-        statusDiv.className = 'status status-waiting';
+        setConnStatus("Error", false, true);
         
         //M: Auto-Reconnect after 3 secs
         setTimeout(connectWebSocket, 3000);
     };
 }
 
+function setConnStatus(text, connected, error) {
+  connEl.textContent = text;
+  if (error) {
+    connEl.className = "status - error";
+  } else if (connected) {
+    connEl.className = "status - connected";
+  } else {
+    connEl.className = "status - waiting";
+  }
+}
   // Game loop
-  let lastTick = 0;
+let lastTick = 0;
   function loop(ts) {
     if (!alive) return draw(); // stop updates, keep last frame
     if (ts - lastTick >= tickMs) {
@@ -97,7 +105,6 @@
     draw();
     requestAnimationFrame(loop);
   }
-  requestAnimationFrame(loop);
 
   function step() {
     // Apply buffered direction
@@ -167,4 +174,7 @@
       if (!snake.some(s => s.x === f.x && s.y === f.y)) return f;
     }
   }
+
+  connectWebSocket();
+  requestAnimationFrame(loop);
 })();
