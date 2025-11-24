@@ -137,14 +137,14 @@ class EOGReader(threading.Thread):
         if (current_time - self.last_v_movement_time) < config.GLOBAL_COOLDOWN:
             return False
         
-        # Store the detection for later use in final selection
+        # Store the detection for later use in final selection (hasnt pushed yet)
         self.pending_v = det
 
         # Update vertical cooldown timer
         self.last_v_movement_time = current_time
         return True
     
-    def _finalize_combined_detection(self):
+    async def _finalize_combined_detection(self):
         """Create a final detection from pending horizontal and vertical detections"""
         current_time = time.time() - self.start_time
 
@@ -202,7 +202,8 @@ class EOGReader(threading.Thread):
         # Clear pending buffers for next cycle
         self.pending_h = None
         self.pending_v = None
-
+        await asyncio.sleep(1)  # Yield control to event loop
+        
     def _push(self, det: Detection):
         """Push detection to queue with cooldown check"""
         current_time = time.time() - self.start_time
@@ -249,7 +250,7 @@ class EOGReader(threading.Thread):
             ch1 = np.array(self.detect_channel_buffers[0])
             ch2 = np.array(self.detect_channel_buffers[1])
             ch3 = np.array(self.detect_channel_buffers[2])
-            ch5 = np.array(self.detect_channel_buffers[7])
+            ch5 = np.array(self.detect_channel_buffers[4])
 
             # Ensure all arrays have the same length
             min_length = min(len(times), len(ch1), len(ch2), len(ch3), len(ch5))
@@ -649,7 +650,7 @@ class EOGReader(threading.Thread):
                     ch1 = np.array(self.channel_buffers[0])
                     ch2 = np.array(self.channel_buffers[1])
                     ch3 = np.array(self.channel_buffers[2])
-                    ch5 = np.array(self.channel_buffers[7])
+                    ch5 = np.array(self.channel_buffers[4])
 
                     # Ensure all arrays have the same length
                     min_length = min(len(self.time_buffer), len(ch1), len(ch2), len(ch3), len(ch5))

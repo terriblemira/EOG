@@ -94,7 +94,7 @@ def run_calibration(eog_reader, window, font, calibration_sequence, clock):
                 step_samples_ch1.extend(samples[:, 0])
                 step_samples_ch2.extend(samples[:, 1])
                 step_samples_ch3.extend(samples[:, 2])
-                step_samples_ch5.extend(samples[:, 7])
+                step_samples_ch5.extend(samples[:, 4])
             pygame.event.pump()
 
 
