@@ -99,7 +99,7 @@ def plot_detection_window(
         ch1 = np.array(eog_reader.channel_buffers[0])
         ch2 = np.array(eog_reader.channel_buffers[1])
         ch3 = np.array(eog_reader.channel_buffers[2])
-        ch5 = np.array(eog_reader.channel_buffers[7])
+        ch5 = np.array(eog_reader.channel_buffers[4])
 
         # Use calibration or defaults
         cal = calibration_params or eog_reader.calibration_params

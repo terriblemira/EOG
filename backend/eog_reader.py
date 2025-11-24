@@ -137,14 +137,14 @@ class EOGReader(threading.Thread):
         if (current_time - self.last_v_movement_time) < config.GLOBAL_COOLDOWN:
             return False
         
-        # Store the detection for later use in final selection
+        # Store the detection for later use in final selection (hasnt pushed yet)
         self.pending_v = det
 
         # Update vertical cooldown timer
         self.last_v_movement_time = current_time
         return True
     
-    def _finalize_combined_detection(self):
+    async def _finalize_combined_detection(self):
         """Create a final detection from pending horizontal and vertical detections"""
         current_time = time.time() - self.start_time
 
@@ -202,7 +202,8 @@ class EOGReader(threading.Thread):
         # Clear pending buffers for next cycle
         self.pending_h = None
         self.pending_v = None
-
+        await asyncio.sleep(1)  # Yield control to event loop
+        
     def _push(self, det: Detection):
         """Push detection to queue with cooldown check"""
         current_time = time.time() - self.start_time
