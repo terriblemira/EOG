@@ -38,7 +38,7 @@ async def websocket_endpoint(websocket: WebSocket):
             if counter % 10 == 0:  # every 1 second
                  is_empty = eog_reader.signal.empty() #DEBUG
                  queue_size = eog_reader.signal.qsize() #DEBUG
-                 print(f"Loop {counter} running: Queue empty={is_empty}, size={queue_size}")  # DEBUG
+                 #print(f"Loop {counter} running: Queue empty={is_empty}, size={queue_size}")  # DEBUG
                  print(f"signal queue contents (directions): {list(eog_reader.signal.queue)}")  # DEBUG
             
             if not eog_reader.signal.empty():
