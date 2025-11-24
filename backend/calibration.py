@@ -700,7 +700,7 @@ def run_blink_calibration(eog_reader, window, font, clock, calibration_params):
 
     # Calculate blink threshold using the same detection logic    # Calculate blink threshold using the same detection logic
     try:
-        blink_samples = detect_blinks_in_signal(V_compensated, FS, calibration_params["thresholds"]["up"])
+        blink_samples = detect_blinks_in_signal(V_compensated, FS, calibration_params["thresholds"]["up"], BLINK_MIN_DURATION, BLINK_MAX_DURATION)
         if len(blink_samples) >= BLINK_MIN_SAMPLES:
             # Extract peak values for threshold calculation
             peak_values = [sample['peak_value'] for sample in blink_samples]
