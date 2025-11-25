@@ -6,7 +6,7 @@ import matplotlib
 matplotlib.use('Agg')   # <-- non-interactive backend safe for threads & headless envs
 import matplotlib.pyplot as plt
 from datetime import datetime
-from config import DEBUG_PLOTS, BG_COLOR, BLACK, PLOT_BUFFER_DURATION, BLINK_THRESHOLD
+from config import DEBUG_PLOTS, BG_COLOR, WHITE, PLOT_BUFFER_DURATION, BLINK_THRESHOLD
 # Create a shared, date-stamped results folder
 from datetime import datetime
 from config import RESULTS_DIR
@@ -24,7 +24,7 @@ def wait_for_spacebar(window, font, message="Press SPACEBAR to continue"):
     global setBreakMarker
     global endOfBreakTime
     window.fill(BG_COLOR)
-    instruction_surf = font.render(message, True, BLACK)
+    instruction_surf = font.render(message, True, WHITE)
     window.blit(instruction_surf, (window.get_width() // 2 - instruction_surf.get_width() // 2,
                                       window.get_height() // 2))
     pygame.display.flip()

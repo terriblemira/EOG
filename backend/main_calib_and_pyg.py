@@ -55,7 +55,7 @@ def run_calibration(eog_reader, window, font, calibration_sequence, clock):
         # Add a rest step every 8 targets
         if i > 0 and i % 8 == 0:
             window.fill(BG_COLOR)
-            rest_surf = font.render("Rest your eyes. Press SPACEBAR to continue.", True, BLACK)
+            rest_surf = font.render("Rest your eyes. Press SPACEBAR to continue.", True, WHITE)
             window.blit(rest_surf, (WIDTH // 2 - rest_surf.get_width() // 2, HEIGHT // 2))
             pygame.display.flip()
             if not wait_for_spacebar(window, font, "Rest your eyes. Press SPACEBAR to continue..."):
@@ -71,7 +71,7 @@ def run_calibration(eog_reader, window, font, calibration_sequence, clock):
             pygame.draw.circle(window, RED, p, DOT_RADIUS_STATIC)
         pygame.draw.circle(window, BLUE, pos, DOT_RADIUS_ACTIVE)
         instruction = f"Looking at {target_name}..."
-        surf = font.render(instruction, True, BLACK)
+        surf = font.render(instruction, True, WHITE)
         window.blit(surf, (10, 50))
         pygame.display.flip()
 
@@ -153,6 +153,15 @@ def main():
     """Main application function"""
     # Initialize Pygame
     pygame.init()
+    # Get screen dimensions
+    screen_info = pygame.display.Info()
+    SCREEN_WIDTH, SCREEN_HEIGHT = screen_info.current_w, screen_info.current_h
+
+    # Set window size as a percentage of screen size
+    WIDTH = int(SCREEN_WIDTH * 0.9)  # Use 90% of screen width
+    HEIGHT = int(SCREEN_HEIGHT * 0.8)  # Use 80% of screen height
+    center_pos = [WIDTH // 2, HEIGHT // 2]
+
     window = pygame.display.set_mode((WIDTH, HEIGHT))
     pygame.display.set_caption("Static Jumps + EOG Accuracy Test")
     clock = pygame.time.Clock()
@@ -380,8 +389,8 @@ def main():
 
             # Draw center cross
             cx, cy = WIDTH // 2, HEIGHT // 2
-            pygame.draw.line(window, BLACK, (cx - CENTER_CROSS, cy), (cx + CENTER_CROSS, cy), 3)
-            pygame.draw.line(window, BLACK, (cx, cy - CENTER_CROSS), (cx, cy + CENTER_CROSS), 3)
+            pygame.draw.line(window, WHITE, (cx - CENTER_CROSS, cy), (cx + CENTER_CROSS, cy), 3)
+            pygame.draw.line(window, WHITE, (cx, cy - CENTER_CROSS), (cx, cy + CENTER_CROSS), 3)
 
             # Draw overlays
             acc = (running_correct / running_total * 100.0) if running_total > 0 else 0.0
@@ -394,7 +403,7 @@ def main():
             ]
             y = 10
             for line in overlay_lines:
-                surf = font.render(line, True, BLACK)
+                surf = font.render(line, True, WHITE)
                 window.blit(surf, (10, y))
                 y += 32
 
@@ -409,7 +418,7 @@ def main():
         save_results(trials, calibration_params) # M: saving of thresholds etc in save_results (csv-file)
         # Display completion message
         window.fill(BG_COLOR)
-        completion_surf = font.render("Task complete! Press SPACEBAR to exit.", True, BLACK)
+        completion_surf = font.render("Task complete! Press SPACEBAR to exit.", True, WHITE)
         window.blit(completion_surf, (WIDTH // 2 - completion_surf.get_width() // 2, HEIGHT // 2))
         pygame.display.flip()
 

@@ -5,7 +5,7 @@ matplotlib.use('Agg')   # <-- non-interactive backend safe for threads & headles
 import matplotlib.pyplot as plt
 from datetime import datetime# Create a shared, date-stamped results folder
 import os
-from config import DEBUG_PLOTS, BLINK_MIN_DURATION, BLINK_MAX_DURATION, BLINK_MIN_SAMPLES, BLINK_THRESHOLD_MULTIPLIER, FS, TOTAL_CHANNELS, BLINK_CALIBRATION_DURATION, BLINK_MAX_SAMPLES, BG_COLOR, BLACK, WIDTH, HEIGHT, RESULTS_DIR
+from config import DEBUG_PLOTS, BLINK_MIN_DURATION, BLINK_MAX_DURATION, BLINK_MIN_SAMPLES, BLINK_THRESHOLD_MULTIPLIER, FS, TOTAL_CHANNELS, BLINK_CALIBRATION_DURATION, BLINK_MAX_SAMPLES, BG_COLOR, WHITE, WIDTH, HEIGHT, RESULTS_DIR
 from utils import wait_for_spacebar
 import os
 import time
@@ -553,7 +553,7 @@ def run_blink_calibration(eog_reader, window, font, clock, calibration_params):
 
     # Draw static elements on the background
     instruction_surf = font.render(
-        "Blink Calibration: Blink naturally when circle is GREEN", True, BLACK
+        "Blink Calibration: Blink naturally when circle is GREEN", True, WHITE
     )
     background.blit(
         instruction_surf,
@@ -587,7 +587,7 @@ def run_blink_calibration(eog_reader, window, font, clock, calibration_params):
             screen_copy = background.copy()
 
             # Draw prompt counter
-            prompt_surf = font.render(f"Blink {prompt_count}/{total_prompts}", True, BLACK)
+            prompt_surf = font.render(f"Blink {prompt_count}/{total_prompts}", True, WHITE)
             screen_copy.blit(
                 prompt_surf,
                 (WIDTH // 2 - prompt_surf.get_width() // 2,
@@ -625,7 +625,7 @@ def run_blink_calibration(eog_reader, window, font, clock, calibration_params):
             remaining_time = remaining_prompts * BLINK_PROMPT_INTERVAL
 
             # Update timer
-            timer_surf = font.render(f"Time left: {max(0, int(remaining_time))}s", True, BLACK)
+            timer_surf = font.render(f"Time left: {max(0, int(remaining_time))}s", True, WHITE)
             screen_copy.blit(
                 timer_surf,
                 (WIDTH // 2 - timer_surf.get_width() // 2,
@@ -634,7 +634,7 @@ def run_blink_calibration(eog_reader, window, font, clock, calibration_params):
 
 
             # Draw prompt counter
-            prompt_surf = font.render(f"Blink {prompt_count}/{total_prompts}", True, BLACK)
+            prompt_surf = font.render(f"Blink {prompt_count}/{total_prompts}", True, WHITE)
             screen_copy.blit(
                 prompt_surf,
                 (WIDTH // 2 - prompt_surf.get_width() // 2,

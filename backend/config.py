@@ -4,17 +4,15 @@ from datetime import datetime
 # -------- Settings ------------
 # ==============================
 # --- Pygame / task ---
-WIDTH, HEIGHT = 1900, 1000
-BG_COLOR = (220, 220, 220)
-RED = (255, 0, 0)
-BLUE = (0, 0, 255)
-BLACK = (0, 0, 0)
+BG_COLOR = (50, 50, 50)
+RED = (213, 94, 0)
+BLUE = (0, 114, 178)
+WHITE = (255, 255, 255)
 STEP_DURATION = 5.0        # seconds between target jumps
 RESPONSE_WINDOW = 3         # seconds after each jump during which we accept the first valid detection
-DOT_RADIUS_ACTIVE = 20
-DOT_RADIUS_STATIC = 10
-CENTER_CROSS = 10
-center_pos = [WIDTH // 2, HEIGHT // 2]
+DOT_RADIUS_ACTIVE = 60
+DOT_RADIUS_STATIC = 30
+CENTER_CROSS = 30
 RESULTS_DIR = os.path.join("results", datetime.now().strftime("%Y%m%d_%H%M%S"))
 os.makedirs(RESULTS_DIR, exist_ok=True)
 
