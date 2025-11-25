@@ -2,10 +2,12 @@
 Electrooculography (EOG) signals use BCI technology to detect eye movements. We are using it to setup a gaming platform where you can use eyes to control movements.
 
 # Notes for Repository Use
-DO NOT PUSH WITHOUT TESTING FIRST/WHEN BEING UNSURE ABT SOMETHING. CREATE A NEW BRANCH FIRST. JUST MERGE BRANCHES AFTER TALKING TO COLLEGUES. IF UNSURE OR MAKING BIG CHANGES: BETTER "FORK"ING (=COPYING) COMPLETE EOG-REPOSITORY (eventually google how to)
-QUESTIONS to "#M" parts IN CODE: +49 15752577184 on What's App
+DO NOT PUSH WITHOUT TESTING FIRST/WHEN BEING UNSURE ABT SOMETHING.
+CREATE A NEW BRANCH FIRST.
+JUST MERGE BRANCHES AFTER TALKING TO COLLEGUES. IF UNSURE OR MAKING BIG CHANGES: BETTER "FORK"ING (=COPYING) COMPLETE EOG-REPOSITORY (eventually google how to)
+Questions to "#M" parts in code: miradrini@gmail.com
 
-# MINECRAFT CONNECTION IDEAS:
+# Minecraft Connection Ideas:
 1. General:
 - 1st person
 - important moves: lefty/righty/jumpy/sneeky/hit(y)/klick(y)/dropn/open inventoryy/runn
