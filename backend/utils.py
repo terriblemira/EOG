@@ -1,3 +1,4 @@
+# saves raw data, save detected steps during task (test) (save_results), ...
 import pygame
 import os
 import csv
@@ -11,6 +12,11 @@ from config import DEBUG_PLOTS, BG_COLOR, BLACK, PLOT_BUFFER_DURATION, BLINK_THR
 from datetime import datetime
 from config import RESULTS_DIR
 import time
+import eog_reader as eog_thread
+from scipy.interpolate import interp1d
+from signal_processing_wavelet import process_signal
+from calibration import RESULTS_DIR  # ✅ use shared folder
+
 csv_path = os.path.join(RESULTS_DIR, "eog_trial_results.csv")
 
 start_time = time.time() #M: store start time of program to calculate timepoints later
@@ -70,14 +76,6 @@ def plot_detection_window(
     Plot smooth detection signals from the EOGReader in a single figure with H and V subplots.
     Saves plots to the same RESULTS_DIR as calibration.py.
     """
-    from datetime import datetime
-    import os
-    import numpy as np
-    import matplotlib.pyplot as plt
-    from scipy.interpolate import interp1d
-    from signal_processing_wavelet import process_signal
-    from config import DEBUG_PLOTS
-    from calibration import RESULTS_DIR  # ✅ use shared folder
 
     if not DEBUG_PLOTS:
         return
@@ -176,6 +174,7 @@ def plot_detection_window(
         import traceback
         traceback.print_exc()
 
+# Save what was actually detected during the test: !!SCORING WRONG!!
 def save_results(trials, calibration_params, out_path=None):
     """Save trial results to CSV file"""
     try:
@@ -238,3 +237,14 @@ def save_results(trials, calibration_params, out_path=None):
         import traceback
         traceback.print_exc()
         return False
+    
+def save_raw_data(filename):
+    if len(eog_thread.raw_log) == 0:
+        print(f"[EOGReader] No raw data to save for {filename}")
+        return
+
+    with open(filename, "w", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow(["time"] + [f"ch{i}" for i in range(1, len(eog_thread.raw_log[0]))])
+        writer.writerows(eog_thread.raw_log)
+    print(f"[EOGReader] Saved raw data: {filename}")

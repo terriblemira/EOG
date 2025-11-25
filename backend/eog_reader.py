@@ -1,3 +1,4 @@
+# processing pushes
 import threading
 import collections
 import numpy as np
@@ -94,17 +95,6 @@ class EOGReader(threading.Thread):
 
         self.debug_counter = 0
         self.last_plot_update = time.time()
-
-    def save_raw_data(self, filename):
-        if len(self.raw_log) == 0:
-            print(f"[EOGReader] No raw data to save for {filename}")
-            return
-        import csv
-        with open(filename, "w", newline="") as f:
-            writer = csv.writer(f)
-            writer.writerow(["time"] + [f"ch{i}" for i in range(1, len(self.raw_log[0]))])
-            writer.writerows(self.raw_log)
-        print(f"[EOGReader] Saved raw data: {filename}")
 
     def _push_horizontal(self, det: Detection):
         """Push horizontal detection to queue with cooldown check"""
@@ -203,7 +193,7 @@ class EOGReader(threading.Thread):
         self.pending_h = None
         self.pending_v = None
         await asyncio.sleep(1)  # Yield control to event loop
-        
+
     def _push(self, det: Detection):
         """Push detection to queue with cooldown check"""
         current_time = time.time() - self.start_time

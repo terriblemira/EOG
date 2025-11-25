@@ -1,3 +1,4 @@
+# Calibration sequences, calib functions (run,), plotting of calibration
 import numpy as np
 from signal_processing_wavelet import process_signal, process_eog_signals
 import matplotlib
@@ -5,11 +6,171 @@ matplotlib.use('Agg')   # <-- non-interactive backend safe for threads & headles
 import matplotlib.pyplot as plt
 from datetime import datetime# Create a shared, date-stamped results folder
 import os
-from config import DEBUG_PLOTS, BLINK_MIN_DURATION, BLINK_MAX_DURATION, BLINK_MIN_SAMPLES, BLINK_THRESHOLD_MULTIPLIER, FS, TOTAL_CHANNELS, BLINK_CALIBRATION_DURATION, BLINK_MAX_SAMPLES, BG_COLOR, BLACK, WIDTH, HEIGHT, RESULTS_DIR
+from config import * # * = import all
 from utils import wait_for_spacebar
 import os
 import time
 import pygame
+
+def run_calibration(eog_reader, window, font, calibration_sequence, clock): # variable eog_reader in calibration.py = variable eog_thread in main_calib_and_pyg.py (main "grabs" eog_reader from calibration and uses it as eog_thread)
+    global is_calib_running
+    is_calib_running = True
+    center_pos = [WIDTH // 2, HEIGHT // 2]   
+    calibration_sequence = [
+        ("center", center_pos),
+        ("left", [int(0.05 * WIDTH), HEIGHT // 2]),
+        ("center", center_pos),
+        ("right", [int(0.95 * WIDTH), HEIGHT // 2]),
+        ("center", center_pos),
+        ("up", [WIDTH // 2, int(0.05 * HEIGHT)]),
+        ("center", center_pos),
+        ("down", [WIDTH // 2, int(0.95 * HEIGHT)]),
+        ("center", center_pos),
+        ("left", [int(0.05 * WIDTH), HEIGHT // 2]),
+        ("center", center_pos),
+        ("right", [int(0.95 * WIDTH), HEIGHT // 2]),
+        ("center", center_pos),
+        ("up", [WIDTH // 2, int(0.05 * HEIGHT)]),
+        ("center", center_pos),
+        ("down", [WIDTH // 2, int(0.95 * HEIGHT)]),
+        ("center", center_pos),
+        ("left", [int(0.05 * WIDTH), HEIGHT // 2]),
+        ("center", center_pos),
+        ("right", [int(0.95 * WIDTH), HEIGHT // 2]),
+        ("center", center_pos),
+        ("up", [WIDTH // 2, int(0.05 * HEIGHT)]),
+        ("center", center_pos),
+        ("down", [WIDTH // 2, int(0.95 * HEIGHT)]),
+        ("center", center_pos),
+        ("left", [int(0.05 * WIDTH), HEIGHT // 2]),
+        ("center", center_pos),
+        ("right", [int(0.95 * WIDTH), HEIGHT // 2]),
+        ("center", center_pos),
+        ("up", [WIDTH // 2, int(0.05 * HEIGHT)]),
+        ("center", center_pos),
+        ("down", [WIDTH // 2, int(0.95 * HEIGHT)]),
+    ]
+
+    """Run calibration to determine baselines and thresholds"""
+    # Data structure to store raw signals for each direction
+    calibration_data = {
+        "left": {"ch1": [], "ch2": [], "ch3": [], "ch5": []},
+        "right": {"ch1": [], "ch2": [], "ch3": [], "ch5": []},
+        "up": {"ch1": [], "ch2": [], "ch3": [], "ch5": []},
+        "down": {"ch1": [], "ch2": [], "ch3": [], "ch5": []},
+        "center": {"ch1": [], "ch2": [], "ch3": [], "ch5": []}
+    }
+
+    # Clear the detection queue
+    eog_reader.out_queue.clear()
+
+    # Instructions for calibration
+    if not wait_for_spacebar(window, font, "Press SPACEBAR to begin calibration..."):
+        return {
+            "baselines": {"H": 0, "V": 0},
+            "thresholds": {"left": 0.1, "right": 0.1, "up": 0.1, "down": 0.1},
+            "channel_norm_factors": {"ch1": 1, "ch2": 1, "ch3": 1, "ch5": 1},
+            "alpha": 0.0
+        }
+
+    # Record data for each target
+    for i, (target_name, pos) in enumerate(calibration_sequence):
+        target_key = target_name.lower()
+
+        # Add a rest step every 8 targets
+        if i > 0 and i % 4 == 0:
+            window.fill(BG_COLOR)
+            rest_surf = font.render("Rest your eyes. Press SPACEBAR to continue.", True, BLACK)
+            window.blit(rest_surf, (WIDTH // 2 - rest_surf.get_width() // 2, HEIGHT // 2))
+            pygame.display.flip()
+            if not wait_for_spacebar(window, font, "Rest your eyes. Press SPACEBAR to continue..."):
+                return {
+                    "baselines": {"H": 0, "V": 0},
+                    "thresholds": {"left": 0.1, "right": 0.1, "up": 0.1, "down": 0.1},
+                    "channel_norm_factors": {"ch1": 1, "ch2": 1, "ch3": 1, "ch5": 1}
+                }
+
+        # Show the target
+        window.fill(BG_COLOR)
+        for name, p in calibration_sequence:
+            pygame.draw.circle(window, RED, p, DOT_RADIUS_STATIC)
+        pygame.draw.circle(window, BLUE, pos, DOT_RADIUS_ACTIVE)
+        instruction = f"Looking at {target_name}..."
+        surf = font.render(instruction, True, BLACK)
+        window.blit(surf, (10, 50))
+        pygame.display.flip()
+
+        # Record EOG data for 3 seconds
+        start_time = time.time() # duration of calibration step (how long keeps point "left"/...)
+        end_time = start_time + 1.5
+
+        # Temporary lists to collect samples for this step
+        step_samples_ch1 = []
+        step_samples_ch2 = []
+        step_samples_ch3 = []
+        step_samples_ch5 = []
+
+        print(f"Recording {target_name} for 3 seconds...")
+        sample_count = 0
+        while time.time() < end_time:
+            samples, timestamps = eog_reader.inlet.pull_chunk(timeout=0.1, max_samples=FS)
+            if samples:
+                samples = np.array(samples)
+                step_samples_ch1.extend(samples[:, 0])
+                step_samples_ch2.extend(samples[:, 1])
+                step_samples_ch3.extend(samples[:, 2])
+                step_samples_ch5.extend(samples[:, 4])
+            pygame.event.pump()
+
+
+        print(f"Recorded {len(step_samples_ch1)} samples for {target_name}")
+
+        # Store the full arrays for this step
+        if step_samples_ch1 and step_samples_ch2 and step_samples_ch3 and step_samples_ch5:
+            calibration_data[target_key]["ch1"].append(np.array(step_samples_ch1))
+            calibration_data[target_key]["ch2"].append(np.array(step_samples_ch2))
+            calibration_data[target_key]["ch3"].append(np.array(step_samples_ch3))
+            calibration_data[target_key]["ch5"].append(np.array(step_samples_ch5))
+        else:
+            print(f"WARNING: No samples collected for {target_name}!")
+
+    # Calculate channel normalization factors
+    channel_norm_factors = {
+        "ch1": calculate_channel_norm_factor(calibration_data, "ch1"),
+        "ch2": calculate_channel_norm_factor(calibration_data, "ch2"),
+        "ch3": calculate_channel_norm_factor(calibration_data, "ch3"),
+        "ch5": calculate_channel_norm_factor(calibration_data, "ch5")
+    }
+
+    print(f"\nChannel normalization factors: "
+          f"ch1={channel_norm_factors['ch1']:.2f}, ch2={channel_norm_factors['ch2']:.2f}, "
+          f"ch3={channel_norm_factors['ch3']:.2f}, ch5={channel_norm_factors['ch5']:.2f}")
+
+    # Calculate baselines from normalized signals
+    H_baseline = calculate_normalized_baseline(calibration_data, channel_norm_factors, "H")
+    V_baseline = calculate_normalized_baseline(calibration_data, channel_norm_factors, "V")
+    baselines = {"H": H_baseline, "V": V_baseline}
+
+    # Calculate direction-specific thresholds and alpha
+    thresholds, alpha = calculate_direction_thresholds(calibration_data, channel_norm_factors, baselines)
+
+    # Format thresholds for return
+    formatted_thresholds = {
+        "left": thresholds.get("left", 0.05),
+        "right": thresholds.get("right", 0.05),
+        "up": thresholds.get("up", 0.05),
+        "down": thresholds.get("down", 0.05)
+    }
+
+    plot_calibration_signals(calibration_data, channel_norm_factors, baselines, formatted_thresholds, alpha)
+    is_calib_running = False
+
+    return {
+        "baselines": baselines,
+        "thresholds": formatted_thresholds,
+        "channel_norm_factors": channel_norm_factors,
+        "alpha": alpha
+    }
 
 def is_valid_step(step): #steps in calibration swequence (left to center is a step, center to right, etc.)
     """Check if a step is a valid list or array of samples."""
