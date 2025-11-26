@@ -4,7 +4,7 @@ import asyncio
 import uvicorn 
 from eog_reader import EOGReader
 import websockets
-import main_calib_and_pyg
+import test
 import collections
 import app
 import threading
@@ -32,7 +32,7 @@ async def main():
     # #await eog.connect_to_webapp() #M: connect & holding connection to app.py (from eog_reader.py)
     # eog.start() #M: start eog_reader (thread)
 
-    main_calib_and_pyg.main() #M: run main function from main_calib_and_pyg
+    test.main() #M: run main function from test
 
     while True:#M: Keep the main function alive (don't block the event loop)
         await asyncio.sleep(1)   #M: only this function sleeps(=waits) repeatedly for 1 second(-->forever) (so "restaurant(main function) is not closing but stays open" after last line of the function), other tasks working parallelly

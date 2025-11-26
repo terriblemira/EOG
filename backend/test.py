@@ -1,3 +1,5 @@
+
+# perform test when if not wait_for_spacebar (function from utils), then save data from the test without stopping EOG Thread
 import pygame
 import asyncio
 import time
@@ -52,7 +54,7 @@ def main():
 
     eog_thread.raw_log = []
     eog_thread.record_raw = True
-    calibration_params = run_calibration(eog_thread, window, font, clock, WIDTH, HEIGHT) #runs function with parameters in brackets and saves outcome as "(main_calib_and_pyg.)calibration_params" (eog.calibration_params not changed yet!)
+    calibration_params = run_calibration(eog_thread, window, font, clock, WIDTH, HEIGHT) #runs function with parameters in brackets and saves outcome as "(test.)calibration_params" (eog.calibration_params not changed yet!)
     eog_thread.record_raw = False
     eog_thread.save_raw_data(os.path.join(RESULTS_DIR, "calibration_raw_signals.csv"))
     #samples, timestamps = eog_thread.inlet.pull_chunk(timeout=0.01)

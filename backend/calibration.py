@@ -12,7 +12,7 @@ import os
 import time
 import pygame
 
-def run_calibration(eog_reader, window, font, clock, WIDTH, HEIGHT): # variable eog_reader in calibration.py = variable eog_thread in main_calib_and_pyg.py (main "grabs" eog_reader from calibration and uses it as eog_thread)
+def run_calibration(eog_reader, window, font, clock, WIDTH, HEIGHT): # variable eog_reader in calibration.py = variable eog_thread in test.py (main "grabs" eog_reader from calibration and uses it as eog_thread)
     global is_calib_running
     is_calib_running = True
 

@@ -12,7 +12,7 @@ from stream import get_stream_inlet, has_lsl_stream
 from signal_interpret import SignalInterpreter, CalibrationConfig   # <-- add CalibrationConfig
 from calibration_placeh import CalibrationSession
 import eog_reader
-import main_calib_and_pyg as main_c_and_p
+import test as test
 from queue import Queue
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -42,7 +42,7 @@ async def websocket_endpoint(websocket: WebSocket):
                  print(f"signal queue contents (directions): {list(eog_reader.signal.queue)}")  # DEBUG
             
             if not eog_reader.signal.empty():
-                #and main_c_and_p.is_calib_running == True:
+                #and test.is_calib_running == True:
                 direction = eog_reader.signal.get()
                 print(f"direction received: {direction}")
                 if direction == "left":
