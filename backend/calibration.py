@@ -88,18 +88,27 @@ def run_calibration(eog_reader, window, font, clock, WIDTH, HEIGHT): # variable 
     for i, (target_name, pos) in enumerate(calibration_sequence):
         target_key = target_name.lower()
 
-        # Add a rest step every 8 targets
+        # Add a rest step every 4 targets
         if i > 0 and i % 4 == 0:
+            # Show rest message
             window.fill(BG_COLOR)
-            rest_surf = font.render("Rest your eyes. Press SPACEBAR to continue. You will continue in the center", True, WHITE)
+            rest_surf = font.render("Rest your eyes for 5 seconds. You will continue in the center", True, WHITE)
             window.blit(rest_surf, (WIDTH // 2 - rest_surf.get_width() // 2, HEIGHT // 2))
             pygame.display.flip()
-            if not wait_for_spacebar(window, font, "Rest your eyes. Press SPACEBAR to continue..."):
-                return {
-                    "baselines": {"H": 0, "V": 0},
-                    "thresholds": {"left": 0.1, "right": 0.1, "up": 0.1, "down": 0.1},
-                    "channel_norm_factors": {"ch1": 1, "ch2": 1, "ch3": 1, "ch5": 1}
-                }
+
+            # Wait for 5 seconds
+            rest_start_time = time.time()
+            while time.time() - rest_start_time < 5.0:
+                # Process events during rest period
+                for event in pygame.event.get():
+                    if event.type == pygame.QUIT:
+                        return {
+                            "baselines": {"H": 0, "V": 0},
+                            "thresholds": {"left": 0.1, "right": 0.1, "up": 0.1, "down": 0.1},
+                            "channel_norm_factors": {"ch1": 1, "ch2": 1, "ch3": 1, "ch5": 1}
+                        }
+                pygame.event.pump()
+                clock.tick(60)  # Keep the game loop running
 
         # Show the target
         window.fill(BG_COLOR)
@@ -113,7 +122,7 @@ def run_calibration(eog_reader, window, font, clock, WIDTH, HEIGHT): # variable 
 
         # Record EOG data for 3 seconds
         start_time = time.time() # duration of calibration step (how long keeps point "left"/...)
-        end_time = start_time + 1.5
+        end_time = start_time + 2
 
         # Temporary lists to collect samples for this step
         step_samples_ch1 = []
@@ -497,7 +506,7 @@ def calculate_direction_thresholds(calibration_data, channel_norm_factors, basel
             # Calculate threshold
             abs_signals = np.abs(signals)
             if len(abs_signals) > 0:
-                threshold = np.percentile(abs_signals, 80) if not is_horizontal else np.percentile(abs_signals, 80)
+                threshold = np.percentile(abs_signals, 75) if not is_horizontal else np.percentile(abs_signals, 80)
                 min_threshold = 0.02 if not is_horizontal else 0.01
                 threshold = max(threshold, min_threshold)
                 thresholds[direction] = threshold
@@ -538,7 +547,7 @@ def plot_direction_signals(calibration_data, direction, channel_norm_factors, ba
         valid_ch2 = [step for step in calibration_data[direction][ch2_key] if is_valid_step(step)]
         valid_steps = min(len(valid_ch1), len(valid_ch2))
 
-        for step_index in range(min(valid_steps, 3)):  # Limit to 3 steps for clarity
+        for step_index in range(valid_steps):  # Limit to 3 steps for clarity
             try:
                 ch1_data = np.array(valid_ch1[step_index])
                 ch2_data = np.array(valid_ch2[step_index])

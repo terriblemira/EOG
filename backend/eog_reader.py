@@ -67,7 +67,8 @@ class EOGReader(threading.Thread):
         self.last_detection_time = 0.0 #in order to be able to create horizontal, vertical, blink cooldowns later with different priorities
         self.last_h_movement_time = -1e9
         self.last_v_movement_time = -1e9
-        self.last_blink_time = -1e9 
+        self.last_blink_time = -1e9
+        self.last_any_movement_time = -1e9
 
         #store last detections for final selection
         self.pending_h = None
@@ -114,6 +115,10 @@ class EOGReader(threading.Thread):
         if self.in_blink_cooldown: # function defined later
             return False
         
+        # Global cooldown for any movement
+        if (current_time - self.last_any_movement_time) < config.GLOBAL_COOLDOWN:
+            return False
+        
         # 2nd priority: Horizontal signal-type cooldown
         if (current_time - self.last_h_movement_time) < config.GLOBAL_COOLDOWN:
             return False
@@ -123,6 +128,7 @@ class EOGReader(threading.Thread):
 
         # Update global cooldown timer
         self.last_h_movement_time = current_time
+        self.last_any_movement_time = current_time  # Update global cooldown
         return True
 
     def _push_vertical(self, det: Detection):
@@ -131,6 +137,10 @@ class EOGReader(threading.Thread):
 
         # Don't push if we're in blink cooldown
         if self.in_blink_cooldown:
+            return False
+        
+        # Global cooldown for any movement
+        if (current_time - self.last_any_movement_time) < config.GLOBAL_COOLDOWN:
             return False
 
         # Vertical signal-type cooldown
@@ -142,6 +152,7 @@ class EOGReader(threading.Thread):
 
         # Update vertical cooldown timer
         self.last_v_movement_time = current_time
+        self.last_any_movement_time = current_time  # Update global cooldown
         return True
     
     async def _finalize_combined_detection(self):
