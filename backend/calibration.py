@@ -12,20 +12,29 @@ import os
 import time
 import pygame
 
-def run_calibration(eog_reader, window, font, clock, WIDTH, HEIGHT): # variable eog_reader in calibration.py = variable eog_thread in main_calib_and_pyg.py (main "grabs" eog_reader from calibration and uses it as eog_thread)
+def run_calibration(eog_reader, window, font, clock, WIDTH, HEIGHT):
     global is_calib_running
     is_calib_running = True
-
     # Get the actual window dimensions
     actual_width, actual_height = pygame.display.get_window_size()
     print(f"Calibration window dimensions: {actual_width}x{actual_height}")
-
     # Use the actual dimensions
     center_pos = [actual_width // 2, actual_height // 2]
-
     # Define dot radii based on window size
     DOT_RADIUS_STATIC = int(min(actual_width, actual_height) * 0.02)
     DOT_RADIUS_ACTIVE = int(min(actual_width, actual_height) * 0.05)
+
+    # Create a function to display the rest screen with options
+    def show_rest_screen(redo_option=False):
+        window.fill(BG_COLOR)
+        rest_surf = font.render("Rest your eyes for 5 seconds. You will continue in the center", True, WHITE)
+        window.blit(rest_surf, (WIDTH // 2 - rest_surf.get_width() // 2, HEIGHT // 2 - 50))
+
+        if redo_option:
+            redo_surf = font.render("Press R to redo the last 4 steps", True, WHITE)
+            window.blit(redo_surf, (WIDTH // 2 - redo_surf.get_width() // 2, HEIGHT // 2 + 50))
+
+        pygame.display.flip()
 
     calibration_sequence = [
         ("center", center_pos),
@@ -85,20 +94,23 @@ def run_calibration(eog_reader, window, font, clock, WIDTH, HEIGHT): # variable 
         }
 
     # Record data for each target
-    for i, (target_name, pos) in enumerate(calibration_sequence):
+    i = 0
+    last_break_index = 0  # Track the index of the last break
+
+    while i < len(calibration_sequence):
+        target_name, pos = calibration_sequence[i]
         target_key = target_name.lower()
 
         # Add a rest step every 4 targets
         if i > 0 and i % 4 == 0:
-            # Show rest message
-            window.fill(BG_COLOR)
-            rest_surf = font.render("Rest your eyes for 5 seconds. You will continue in the center", True, WHITE)
-            window.blit(rest_surf, (WIDTH // 2 - rest_surf.get_width() // 2, HEIGHT // 2))
-            pygame.display.flip()
+            # Show rest message with redo option
+            show_rest_screen(redo_option=True)
 
-            # Wait for 5 seconds
+            # Wait for 5 seconds or for user input
             rest_start_time = time.time()
-            while time.time() - rest_start_time < 5.0:
+            redo_last_steps = False
+
+            while time.time() - rest_start_time < 5.0 and not redo_last_steps:
                 # Process events during rest period
                 for event in pygame.event.get():
                     if event.type == pygame.QUIT:
@@ -107,8 +119,31 @@ def run_calibration(eog_reader, window, font, clock, WIDTH, HEIGHT): # variable 
                             "thresholds": {"left": 0.1, "right": 0.1, "up": 0.1, "down": 0.1},
                             "channel_norm_factors": {"ch1": 1, "ch2": 1, "ch3": 1, "ch5": 1}
                         }
+                    elif event.type == pygame.KEYDOWN:
+                        if event.key == pygame.K_r:  # If 'R' is pressed
+                            redo_last_steps = True
+
                 pygame.event.pump()
                 clock.tick(60)  # Keep the game loop running
+
+            # If user pressed 'R', redo the last 4 steps
+            if redo_last_steps:
+                # Remove data from the last 4 steps
+                steps_to_remove = 4
+                for step_idx in range(i-steps_to_remove, i):
+                    if step_idx >= 0:
+                        step_target = calibration_sequence[step_idx][0].lower()
+                        # Remove data for this step from calibration_data
+                        for channel in ["ch1", "ch2", "ch3", "ch5"]:
+                            if calibration_data[step_target][channel]:
+                                calibration_data[step_target][channel] = calibration_data[step_target][channel][:-1]
+
+                # Reset index to the beginning of the last 4 steps
+                i = last_break_index
+                continue
+
+            # Update last break index
+            last_break_index = i
 
         # Show the target
         window.fill(BG_COLOR)
@@ -121,15 +156,13 @@ def run_calibration(eog_reader, window, font, clock, WIDTH, HEIGHT): # variable 
         pygame.display.flip()
 
         # Record EOG data for 3 seconds
-        start_time = time.time() # duration of calibration step (how long keeps point "left"/...)
+        start_time = time.time()
         end_time = start_time + 2
-
         # Temporary lists to collect samples for this step
         step_samples_ch1 = []
         step_samples_ch2 = []
         step_samples_ch3 = []
         step_samples_ch5 = []
-
         print(f"Recording {target_name} for 3 seconds...")
         sample_count = 0
         while time.time() < end_time:
@@ -141,8 +174,6 @@ def run_calibration(eog_reader, window, font, clock, WIDTH, HEIGHT): # variable 
                 step_samples_ch3.extend(samples[:, 2])
                 step_samples_ch5.extend(samples[:, 4])
             pygame.event.pump()
-
-
         print(f"Recorded {len(step_samples_ch1)} samples for {target_name}")
 
         # Store the full arrays for this step
@@ -154,6 +185,8 @@ def run_calibration(eog_reader, window, font, clock, WIDTH, HEIGHT): # variable 
         else:
             print(f"WARNING: No samples collected for {target_name}!")
 
+        i += 1
+
     # Calculate channel normalization factors
     channel_norm_factors = {
         "ch1": calculate_channel_norm_factor(calibration_data, "ch1"),
@@ -161,19 +194,15 @@ def run_calibration(eog_reader, window, font, clock, WIDTH, HEIGHT): # variable 
         "ch3": calculate_channel_norm_factor(calibration_data, "ch3"),
         "ch5": calculate_channel_norm_factor(calibration_data, "ch5")
     }
-
     print(f"\nChannel normalization factors: "
           f"ch1={channel_norm_factors['ch1']:.2f}, ch2={channel_norm_factors['ch2']:.2f}, "
           f"ch3={channel_norm_factors['ch3']:.2f}, ch5={channel_norm_factors['ch5']:.2f}")
-
     # Calculate baselines from normalized signals
     H_baseline = calculate_normalized_baseline(calibration_data, channel_norm_factors, "H")
     V_baseline = calculate_normalized_baseline(calibration_data, channel_norm_factors, "V")
     baselines = {"H": H_baseline, "V": V_baseline}
-
     # Calculate direction-specific thresholds and alpha
     thresholds, alpha = calculate_direction_thresholds(calibration_data, channel_norm_factors, baselines)
-
     # Format thresholds for return
     formatted_thresholds = {
         "left": thresholds.get("left", 0.05),
@@ -181,10 +210,8 @@ def run_calibration(eog_reader, window, font, clock, WIDTH, HEIGHT): # variable 
         "up": thresholds.get("up", 0.05),
         "down": thresholds.get("down", 0.05)
     }
-
     plot_calibration_signals(calibration_data, channel_norm_factors, baselines, formatted_thresholds, alpha)
     is_calib_running = False
-
     return {
         "baselines": baselines,
         "thresholds": formatted_thresholds,
