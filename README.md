@@ -28,6 +28,13 @@ Questions to "#M" parts in code: miradrini@gmail.com
 
 Web-app to host games and more to be controlled by EOG
 
+## Ideas for further developments
+-   Fine tune blink threshold multiplier to minimize false detections ( up/down detected as blink or vice versa)
+-   label data in calibration to train machine learning algorithm (and move thread_eog.record_raw to run_(blink_)calibration)
+-   Design a simple machine learning algorithm to improve accuracy (likely SVM or Random Forest)
+-   Maybe integrate blink calibration into the breaks in run_calibration
+-   
+
 ## Quick Start
 
 [Insert instructions on connecting mentalab and running the LSL stream]

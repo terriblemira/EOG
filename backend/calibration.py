@@ -733,7 +733,7 @@ def run_blink_calibration(eog_reader, window, font, clock, calibration_params, W
 
     print("Starting blink calibration...")
 
-    BLINK_THRESHOLD = calibration_params["thresholds"]["up"] *1.5  # Start with 1.5x the up threshold
+    BLINK_THRESHOLD = max(calibration_params["thresholds"]["down"],calibration_params["thresholds"]["up"]) * BLINK_THRESHOLD_MULTIPLIER  # Start with 1.5x the up/down threshold
 
     # Wait for spacebar to start
     if not wait_for_spacebar(window, font, "Blink Calibration: Press SPACEBAR to begin"):
