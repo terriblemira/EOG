@@ -7,7 +7,11 @@ CREATE A NEW BRANCH FIRST.
 JUST MERGE BRANCHES AFTER TALKING TO COLLEGUES. IF UNSURE OR MAKING BIG CHANGES: BETTER "FORK"ING (=COPYING) COMPLETE EOG-REPOSITORY (eventually google how to)
 Questions to "#M" parts in code: miradrini@gmail.com
 
-# Minecraft Connection Ideas:
+## Game Glasses
+
+Web-app to host games and more to be controlled by EOG
+
+## Minecraft Connection Ideas:
 1. General:
 - 1st person
 - important moves: lefty/righty/jumpy/sneeky/hit(y)/klick(y)/dropn/open inventoryy/runn
@@ -23,10 +27,11 @@ Questions to "#M" parts in code: miradrini@gmail.com
 - LONG BLINK: open inventory --> LEFT/RIGHT & back to center: no turning but selection changes to left/right continously until looking opposite (not too fast) --> after clicking: inventory automatically closes = back to turning
 - WINK FAST (more than once): hitting
 
-
-## Game Glasses
-
-Web-app to host games and more to be controlled by EOG
+## Ideas for further developments
+-   Fine tune blink threshold multiplier to minimize false detections ( up/down detected as blink or vice versa)
+-   label data in calibration to train machine learning algorithm (and move thread_eog.record_raw to run_(blink_)calibration)
+-   Design a simple machine learning algorithm to improve accuracy (likely SVM or Random Forest)
+-   Maybe integrate blink calibration into the breaks in run_calibration
 
 ## Quick Start
 

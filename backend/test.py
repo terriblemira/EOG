@@ -14,6 +14,7 @@ import utils
 # Create a shared, date-stamped results folder
 from datetime import datetime
 import os
+import json
 
 RESULTS_DIR = os.path.join("results", datetime.now().strftime("%Y%m%d_%H%M%S"))
 os.makedirs(RESULTS_DIR, exist_ok=True)
@@ -68,6 +69,10 @@ def main():
     eog_thread.record_raw = False
     eog_thread.save_raw_data(os.path.join(RESULTS_DIR, "blink_calibration_raw_signals.csv"))
     calibration_params['blink_threshold'] = blink_calibration_results['blink_threshold']
+    calibration_params_file = os.path.join(RESULTS_DIR, "calibration_parameters.json") # saving calibration parameters to json file
+    with open(calibration_params_file, 'w') as f:
+        json.dump(calibration_params, f, indent=4)
+    print(f"Saved calibration parameters to {calibration_params_file}")
     eog_thread.calibration_params = calibration_params # Update calibration params in EOG Reader from default to new
 
     print(f"\nCalibration complete:")
