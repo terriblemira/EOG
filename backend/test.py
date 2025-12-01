@@ -1,5 +1,5 @@
-
-# perform test when if not wait_for_spacebar (function from utils), then save data from the test without stopping EOG Thread
+# perform test when "if not wait(ing)_for_spacebar (function from utils)", then save data from the test without stopping EOG Thread, incl. test GUI & sequence
+#(called main_calib_and_pyg before, moved stuff & changed name)
 import pygame
 import asyncio
 import time
