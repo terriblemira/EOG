@@ -49,3 +49,6 @@ BLINK_COOLDOWN = 0.5             # Minimum time between detected blinks (seconds
 # other constants
 H_VELOCITY_THRESHOLD = 0.05
 V_VELOCITY_THRESHOLD = 0.05
+
+# MOUSE MOVEMENT
+TURNING_COOLDOWN = 0.5  #M: for Minecraft (mouse_replacement.py): seconds to ignore opposite direction signal after starting turn in one direction
