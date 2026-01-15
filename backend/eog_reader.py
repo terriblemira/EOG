@@ -1,3 +1,5 @@
+#detects movements and blinks and adds valid ones to a queue "signal" for other modules to read from
+# !! "signal" queue gets long quickly if class MouseReplacement (in minecraft_control.py) not working
 import threading
 import collections
 import numpy as np
@@ -29,19 +31,9 @@ class Detection:
 
 class EOGReader(threading.Thread):
 
-    #M: function to "create connection once, put it in self.ws and keep it open"; not running yet, will be called in run()
-    # async def connect_to_webapp(self):
-    #     try: 
-    #         uri = "ws://localhost:8000/wsRight"
-    #         self.ws = await websockets.connect(uri)
-    #         print("EOG Reader connected to webapp!")
-    #     except Exception as e1: #M: in case of error which otherwise would bring down the program (prints error & continues)
-    #         print(f"Error connecting to webapp: {str(e1)}")
-
     def __init__(self, out_queue, max_queue=50, calibration_params=None): #M: Joses init function
         super().__init__()
-      #    self.ws = None #M: ws = variable for websocket connection that is right now empty (None) and will get filled with await... in connect_to_webapp()
-      #    self.eventLoop = None #M: event loop = "Main Thread" (1st started function when running, in this case "async def main()" in main.py); "Motor" for all asyncio functions; variable eventLoop gets filled with actual event loop in main.py (with eog.loop = asyncio.get_event_loop())
+
         self.raw_log = []  # To store raw data if recording is enabled
         self.record_raw = False  # Flag to control raw data recording
         self.start_time = None
@@ -340,7 +332,7 @@ class EOGReader(threading.Thread):
                 if self._push_blink(det):
                     print(f"Pushed blink detection to queue at {times[blink['peak_index']]:.2f}s")
                     signal.put("blink")
-                    print(f"Signal now: {signal.queue}")
+                    print(f"Signal now in eog_reader: {signal.queue}")
                     self.last_blink_time = current_time
                     detected_directions.add("blink")
                     return  # Skip other detections in this window when blink is detected
@@ -448,7 +440,7 @@ class EOGReader(threading.Thread):
                 if pushed:
                     detected_directions.add("left")
                     signal.put("left")
-                    print(f"Signal now: {signal.queue}")
+                    print(f"Signal now in eog_reader: {signal.queue}")
 
           # Process right crossings
             for crossing_idx in right_crossings:
@@ -500,7 +492,7 @@ class EOGReader(threading.Thread):
                 if pushed:
                     detected_directions.add("right")
                     signal.put("right")
-                    print(f"Signal now: {signal.queue}")
+                    print(f"Signal now in eog_reader: {signal.queue}")
 
             # --- Vertical movements with improved detection logic ---
             # Find all threshold crossings for up and down
@@ -560,7 +552,7 @@ class EOGReader(threading.Thread):
                 if pushed:
                     detected_directions.add("up")
                     signal.put("up")
-                    print(f"Signal now: {signal.queue}")
+                    print(f"Signal now in eog_reader: {signal.queue}")
 
             # Process down crossings
             for crossing_idx in down_crossings:
@@ -615,7 +607,7 @@ class EOGReader(threading.Thread):
                 if pushed:
                     detected_directions.add("down")
                     signal.put("down")
-                    print(f"Signal now: {signal.queue}")
+                    print(f"Signal now in eog_reader: {signal.queue}")
 
             if not self.in_blink_cooldown:
                 # After processing all detections, finalize combined detection if applicable

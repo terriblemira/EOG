@@ -9,8 +9,10 @@ import time
 import config
 
 class MouseReplacement(threading.Thread):
-    def __init__():
+    def __init__(self):
+        super().__init__()
         pyautogui.FAILSAFE = True     #M: stops when mouse moved to corner 
+        print(f"Class MouseReplacement started as thread")
 
         #M: method run as thread
     def move_continuously(self):
@@ -129,6 +131,7 @@ class MouseReplacement(threading.Thread):
 class KeyBoardReplacement(threading.Thread):
     
     def __init__(self):
+        super().__init__()
         pyautogui.FAILSAFE
 
     # moving forward when double blink within 1 s
@@ -138,40 +141,44 @@ class KeyBoardReplacement(threading.Thread):
                 if not eog_reader.signal.empty():
                     self.direction == eog_reader.signal.get()
                 if self.direction == "blink":
-                    start_time = time.time
+                    start_time = time.time()
                     while 0.05 < time.time - start_time < 1: #M: look for 2nd blink within 1 s; "0.05"-cooldown so it maybe doesnt take 1. blink twice)
                         if self.direction == "blink":
                             pyautogui.keyDown('w')
                             print(f"Holding W down")
+                            eog_reader.signal.clear()  #M: clear queue to avoid getting old signals during cooldown
                             time.sleep(0.5) #M: runs at least 0.5 s before player can stop to avoid eventual weird stuff
                             while True:
                                 if not eog_reader.signal.empty():
                                     self.direction == eog_reader.signal.get()
                                 if self.direction == "blink":   
-                                    start_time = time.time
+                                    start_time = time.time()
                                     while 0.05 < time.time - start_time < 1: #M: look for 2nd blink within 1 s; "0.05"-cooldown so it maybe doesnt take 1. blink twice)
                                         if self.direction == "blink":
                                             pyautogui.keyUp('w')
                                             print(f"Stop W")
+                                            eog_reader.signal.clear()  #M: clear queue to avoid getting old signals during cooldown
+                        else:
+                            eog_reader.signal.clear()  #M: clear queue from single blinks
 
         except Exception as e:
             print(f"Error in getting forward signal")
 
             
-    if __name__ == "__main__":
-        keyBoardReplacement = KeyBoardReplacement()
-        mouseReplacement = MouseReplacement()
+if __name__ == "__main__":
+    keyBoardReplacement = KeyBoardReplacement()
+    mouseReplacement = MouseReplacement()
 
 
-        #Start thread
+    #Start thread
 
-    #M Keep the main thread alive to allow continuous movement
-        # try:
-        #     while True:
-        #         time.sleep(1)  # Keep the main thread alive
-        # except KeyboardInterrupt:
-        #     MouseReplacement.stop_move_continuously()
-        #     print("Program terminated.")
+#M Keep the main thread alive to allow continuous movement
+    # try:
+    #     while True:
+    #         time.sleep(1)  # Keep the main thread alive
+    # except KeyboardInterrupt:
+    #     MouseReplacement.stop_move_continuously()
+    #     print("Program terminated.")
 
 
 

@@ -15,7 +15,8 @@ def start_appy():
     uvicorn.run(app.app, reload=False)
 
 def start_mouse_replacementpy():
-    minecraft_control.MouseMover()
+    minecraft_control.MouseReplacement()
+    minecraft_control.KeyBoardReplacement()
 
 
     
@@ -27,7 +28,11 @@ async def main():
     appy_thread = threading.Thread(target=start_appy, daemon=True) #M: app.py (opening + running of webpage) as separate thread (running paralllel to eog_reader); "daemon=True": background thread, so automatically stops when main program is stopped
     appy_thread.start()
     print(f"FastAPI started") 
+
     mouse_replacementpy_thread = threading.Thread(target=start_mouse_replacementpy, daemon=True)
+    mouse_replacementpy_thread.start()
+    print(f"Mouse & Keyboard Replacement started")
+
     await asyncio.sleep(1)
 
     webbrowser.open("http://localhost:8000/games")
