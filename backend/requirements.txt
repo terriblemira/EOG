@@ -7,3 +7,8 @@ pandas
 pylsl
 websockets
 pyautogui
+PyWavelets
+pygame
+matplotlib
+
+#M: recommended: download conda (google Miniconda) to use as environment instead of PowerShell/Cmd (directly windows) --> code wont interfere with your basic Windows software on laptop and no "no permission"-problems on university laptops
