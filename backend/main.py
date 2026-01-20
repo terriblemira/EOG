@@ -1,4 +1,3 @@
-#M: before running: run app.py to open webpage
 #M: RUN IN Command Prompt under "+"
 import asyncio
 import uvicorn 
@@ -14,24 +13,21 @@ import minecraft_control
 def start_appy(): 
     uvicorn.run(app.app, reload=False)
 
-def start_mouse_replacementpy():
-    minecraft_control.MouseReplacement()
-    minecraft_control.KeyBoardReplacement()
-
-
-    
-
 
 #M: async def main() function as event loop ("Motor" that lets async functions work) (Mainthread that is started(run) first (see at end of code))
 async def main():
     # Run calibration; before starting EOG reader to have calibration params ready
-    appy_thread = threading.Thread(target=start_appy, daemon=True) #M: app.py (opening + running of webpage) as separate thread (running paralllel to eog_reader); "daemon=True": background thread, so automatically stops when main program is stopped
-    appy_thread.start()
-    print(f"FastAPI started") 
+   # appy_thread = threading.Thread(target=start_appy, daemon=True) #M: app.py (opening + running of webpage) as separate thread (running paralllel to eog_reader); "daemon=True": background thread, so automatically stops when main program is stopped
+   # appy_thread.start()
+    #print(f"FastAPI started") 
 
-    mouse_replacementpy_thread = threading.Thread(target=start_mouse_replacementpy, daemon=True)
-    mouse_replacementpy_thread.start()
-    print(f"Mouse & Keyboard Replacement started")
+    mouse_thread = minecraft_control.MouseReplacement()
+    mouse_thread.start() #M: calls run() - method in minecraft_control in MouseReplacement
+
+    keyboard_thread = minecraft_control.KeyBoardReplacement()
+    keyboard_thread.start() #M: calls run() - method in minecraft_control in KeyboardReplacement
+    
+    print("> Mouse & Keyboard Replacement started")
 
     await asyncio.sleep(1)
 

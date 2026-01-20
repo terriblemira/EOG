@@ -147,7 +147,7 @@ class EOGReader(threading.Thread):
         self.last_any_movement_time = current_time  # Update global cooldown
         return True
     
-    async def _finalize_combined_detection(self):
+    def _finalize_combined_detection(self):
         """Create a final detection from pending horizontal and vertical detections"""
         current_time = time.time() - self.start_time
 
@@ -205,7 +205,6 @@ class EOGReader(threading.Thread):
         # Clear pending buffers for next cycle
         self.pending_h = None
         self.pending_v = None
-        await asyncio.sleep(1)  # Yield control to event loop
         
     def _push(self, det: Detection):
         """Push detection to queue with cooldown check"""
@@ -332,7 +331,7 @@ class EOGReader(threading.Thread):
                 if self._push_blink(det):
                     print(f"Pushed blink detection to queue at {times[blink['peak_index']]:.2f}s")
                     signal.put("blink")
-                    print(f"Signal now in eog_reader: {signal.queue}")
+                    #print(f"Signal now in eog_reader: {signal.queue}")
                     self.last_blink_time = current_time
                     detected_directions.add("blink")
                     return  # Skip other detections in this window when blink is detected
@@ -440,7 +439,7 @@ class EOGReader(threading.Thread):
                 if pushed:
                     detected_directions.add("left")
                     signal.put("left")
-                    print(f"Signal now in eog_reader: {signal.queue}")
+                    #print(f"Signal now in eog_reader: {signal.queue}")
 
           # Process right crossings
             for crossing_idx in right_crossings:
@@ -492,7 +491,7 @@ class EOGReader(threading.Thread):
                 if pushed:
                     detected_directions.add("right")
                     signal.put("right")
-                    print(f"Signal now in eog_reader: {signal.queue}")
+                    #print(f"Signal now in eog_reader: {signal.queue}")
 
             # --- Vertical movements with improved detection logic ---
             # Find all threshold crossings for up and down
@@ -552,7 +551,7 @@ class EOGReader(threading.Thread):
                 if pushed:
                     detected_directions.add("up")
                     signal.put("up")
-                    print(f"Signal now in eog_reader: {signal.queue}")
+                    #print(f"Signal now in eog_reader: {signal.queue}")
 
             # Process down crossings
             for crossing_idx in down_crossings:
@@ -607,7 +606,7 @@ class EOGReader(threading.Thread):
                 if pushed:
                     detected_directions.add("down")
                     signal.put("down")
-                    print(f"Signal now in eog_reader: {signal.queue}")
+                    #print(f"Signal now in eog_reader: {signal.queue}")
 
             if not self.in_blink_cooldown:
                 # After processing all detections, finalize combined detection if applicable
