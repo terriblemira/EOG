@@ -4,7 +4,7 @@ Electrooculography (EOG) signals use BCI technology to detect eye movements. We 
 # Notes for Repository Use
 DO NOT PUSH WITHOUT TESTING FIRST/WHEN BEING UNSURE ABT SOMETHING.
 CREATE A NEW BRANCH FIRST.
-JUST MERGE BRANCHES AFTER TALKING TO COLLEGUES. IF UNSURE OR MAKING BIG CHANGES: BETTER "FORK"ING (=COPYING) COMPLETE EOG-REPOSITORY (eventually google how to)
+JUST MERGE BRANCHES AFTER TALKING TO YOUR TEAM. IF UNSURE OR MAKING BIG CHANGES: BETTER "FORK"ING (=COPYING) COMPLETE EOG-REPOSITORY (eventually google how to)
 Questions to "#M" parts in code: miradrini@gmail.com
 
 ## Game Glasses

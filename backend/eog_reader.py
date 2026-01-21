@@ -331,7 +331,7 @@ class EOGReader(threading.Thread):
                 if self._push_blink(det):
                     print(f"Pushed blink detection to queue at {times[blink['peak_index']]:.2f}s")
                     signal.put("blink")
-                    #print(f"Signal now in eog_reader: {signal.queue}")
+                    print(f"Signal now in eog_reader: {signal.queue}")
                     self.last_blink_time = current_time
                     detected_directions.add("blink")
                     return  # Skip other detections in this window when blink is detected
@@ -439,7 +439,7 @@ class EOGReader(threading.Thread):
                 if pushed:
                     detected_directions.add("left")
                     signal.put("left")
-                    #print(f"Signal now in eog_reader: {signal.queue}")
+                    print(f"Signal now in eog_reader: {signal.queue}")
 
           # Process right crossings
             for crossing_idx in right_crossings:

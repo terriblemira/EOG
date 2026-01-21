@@ -1,4 +1,4 @@
-#creates continuous movements in direction of eye movement signal until looking in another direction
+#creates continuous turning in direction of eye movement signal until looking in another direction + presses 'w' if double-blinking + stops 'w' if another blink
 #TODO: check how often signal queue is updated (every 0.1s?) - if too slow, change in eog_reader.py
 #TODO: (maybe in another class bc mouse movements parallel to moving forward): keep W-key pressed when double-blink detected (2 blinks within 1 s), regardless of direction & jump signals (not as elif), so that during moving forward turning & jumps can happen simultaneously: just stop w other double blink
 #TODO: get threadings right!! (turning and moving forward at same time parallel, as well as eog_reader thread)
@@ -8,103 +8,153 @@ import threading
 import time
 import config
 
-class MouseReplacement(threading.Thread):
+class MouseKeyboardReplacement(threading.Thread):
     def __init__(self):
         super().__init__()
         self.running = True
         self.speed = 10
+        self.last_blink_time = None
+        self.wPressed = False
+        self.leftPressed = False
+        self.rightPressed = False
+        self.upPressed = False
+        self.downPressed = False
+        self.direction = None
         pyautogui.FAILSAFE = True     #M: stops when mouse moved to corner 
-        print(f"Class MouseReplacement started as thread")
+        print(f"Class MouseKeyboardReplacement started as thread")
 
     def run(self):
         while self.running:
             if not eog_reader.signal.empty():
-                self.move_continuously()
+                self.direction = eog_reader.signal.get()
+                print(f"minecraft_control: direction {self.direction}")
+
+                if self.direction == "blink":
+                    self.move_forward()
+                else:
+                    self.move_continuously()
             time.sleep(0.01) # for CPU not jumping to 100%, should not b interfering with signal income or sth bc very short
+
 
         #M: method run as thread
     def move_continuously(self):
-
-        try:
-            while True:
-
-                if not eog_reader.signal.empty():
-                    self.direction = eog_reader.signal.get()
-                    print(f"minecraft_control: direction {self.direction}")
                 
-                if self.direction == "left":
-                    pyautogui.keyDown('left') # string for left-arrow-key
-                    start_time = time.time()
-                    while time.time() - start_time < config.TURNING_COOLDOWN:  #M: COOLDOWN: Ignore opposite direction signal for 0.5 seconds
-                        #pyautogui.moveRel(-self.speed, 0) #M: moves 1 time by 10 pixels --> has to be IN while-loop, not like keyDown
-                        eog_reader.signal.clear()  #M: clear queue to avoid getting old signals during cooldown
-                        time.sleep(0.01) #M: to avoid getting cleared millions of times (CPU 1000) ## could cause lagging-problems if working w moveRel
-                        
-                    #M: After 0.5 s(Turning_cooldown): keep moving UNTIL opposite direction signal received
-                    while True:
-                        if not eog_reader.signal.empty(): #M: if empty moves straight to keyUp & checks again next iteration
-                            self.checkingoppositedirection = eog_reader.signal.get()
-                            if self.checkingoppositedirection == "right":
-                                pyautogui.keyUp('left')
-                                break #M: stop this inner "while True" if "right" detected
-                        #pyautogui.moveRel(-self.speed, 0)
-                        time.sleep(0.01) # if empty: jumps here + restarts while-True-checking-loop (!! evtl. PROBLEM bc nothing being detected within those 0.01 s?)
+        if self.direction == "left":
+            if self.rightPressed:
+                pyautogui.keyUp('right')
+                self.rightPressed = False
+            if not self.leftPressed:
+                pyautogui.keyDown('left') # string for left-arrow-key
+                self.leftPressed = True
+                start_time = time.time()
+                while time.time() - start_time < config.TURNING_COOLDOWN:  #M: COOLDOWN: Ignore opposite direction signal for 0.5 seconds
+                    #pyautogui.moveRel(-self.speed, 0) #M: moves 1 time by 10 pixels --> has to be IN while-loop, not like keyDown
+                    eog_reader.signal.clear()  #M: clear queue to avoid getting old signals during cooldown
+                    time.sleep(0.01) #M: to avoid getting cleared millions of times (CPU 1000) ## could cause lagging-problems if working w moveRel
+                
+                #M: After 0.5 s(Turning_cooldown): keep moving UNTIL opposite direction signal received
+ #               while True:
+ #                   if not eog_reader.signal.empty(): #M: if empty moves straight to keyUp & checks again next iteration
+ #                       self.checkingoppositedirection = eog_reader.signal.get()
+ #                       if self.checkingoppositedirection == "right":
+ #                           pyautogui.keyUp('left')
+ #                           break #M: stop this inner "while True" if "right" detected
+ #                   #pyautogui.moveRel(-self.speed, 0)
+ #                   time.sleep(0.01) # if empty: jumps here + restarts while-True-checking-loop (!! evtl. PROBLEM bc nothing being detected within those 0.01 s?)
 
-                elif self.direction == "right":
-                    pyautogui.keyDown('right')
-                    start_time = time.time()
-                    while time.time() - start_time < config.TURNING_COOLDOWN:  #M: COOLDOWN: Ignore opposite direction signal for 0.5 seconds
-                        #pyautogui.moveRel(self.speed, 0)
-                        eog_reader.signal.clear()  #M: clear queue to avoid getting old signals during cooldown
-                        time.sleep(0.01)
+        elif self.direction == "right":
+            if self.leftPressed:
+                pyautogui.keyUp('left')
+                self.leftPressed = False
+            if not self.rightPressed:
+                pyautogui.keyDown('right')
+                self.rightPressed = True
+                start_time = time.time()
+                while time.time() - start_time < config.TURNING_COOLDOWN:  #M: COOLDOWN: Ignore direction signal for 0.5 seconds
+                    #pyautogui.moveRel(self.speed, 0)
+                    eog_reader.signal.clear()  #M: clear queue to avoid getting old signals during cooldown
+                    time.sleep(0.01)
 
-                    #After 0.5 s: keep moving UNTIL opposite direction signal received
-                    while True:
-                        if not eog_reader.signal.empty():
-                            self.checkingoppositedirection = eog_reader.signal.get()
-                            if self.checkingoppositedirection == "left":
-                                pyautogui.keyUp('right')
-                                break
-                        # pyautogui.moveRel(self.speed, 0)
-                        time.sleep(0.01)
+            # #After 0.5 s: keep moving UNTIL opposite direction signal received
+            # while True:
+            #     if not eog_reader.signal.empty():
+            #         self.checkingoppositedirection = eog_reader.signal.get()
+            #         if self.checkingoppositedirection == "left":
+            #             pyautogui.keyUp('right')
+            #             break
+            #     # pyautogui.moveRel(self.speed, 0)
+            #     time.sleep(0.01)
 
-                elif self.direction == "up":
-                    pyautogui.keyDown('up')
-                    start_time = time.time()
-                    while time.time() - start_time < config.TURNING_COOLDOWN:  #M: COOLDOWN: Ignore opposite direction signal for 0.5 seconds
-                        eog_reader.signal.clear()  #M: clear queue to avoid getting old signals during cooldown
-                        #pyautogui.moveRel(0, -self.speed)
-                        time.sleep(0.01)
-                    #After 0.5 s: keep moving UNTIL opposite direction signal received
-                    while True:
-                        if not eog_reader.signal.empty():
-                            self.checkingoppositedirection + eog_reader.signal.get()
-                            if self.checkingoppositedirection == "down":
-                                pyautogui.keyUp('up')
-                                break
-                        #pyautogui.moveRel(0, -self.speed)
-                        time.sleep(0.01)
+        elif self.direction == "up":
+            if self.downPressed:
+                pyautogui.keyUp('down')
+                self.downPressed = False
+            if not self.upPressed:
+                pyautogui.keyDown('up')
+                self.upPressed = True
+                start_time = time.time()
+                while time.time() - start_time < config.TURNING_COOLDOWN:  #M: COOLDOWN: Ignore opposite direction signal for 0.5 seconds
+                    eog_reader.signal.clear()  #M: clear queue to avoid getting old signals during cooldown
+                    #pyautogui.moveRel(0, -self.speed)
+                    time.sleep(0.01)
 
-                elif self.direction == "down":
-                    pyautogui.keyDown('down')
-                    start_time = time.time()
-                    while time.time() - start_time < config.TURNING_COOLDOWN:  #M: COOLDOWN: Ignore opposite direction signal for 0.5 seconds
-                        #pyautogui.moveRel(0, self.speed)
-                        eog_reader.signal.clear()  #M: clear queue to avoid getting old signals during cooldown
-                        time.sleep(0.01) # remove if working with moveRel
+            # #After 0.5 s: keep moving UNTIL opposite direction signal received
+            # while True:
+            #     if not eog_reader.signal.empty():
+            #         self.checkingoppositedirection + eog_reader.signal.get()
+            #         if self.checkingoppositedirection == "down":
+            #             pyautogui.keyUp('up')
+            #             break
+            #     #pyautogui.moveRel(0, -self.speed)
+            #     time.sleep(0.01)
 
-                    #After 0.5 s: keep moving UNTIL opposite direction signal received
-                    while True:
-                        if not eog_reader.signal.empty():
-                            self.checkingoppositedirection = eog_reader.signal.get()
-                            if self.checkingoppositedirection == "up":
-                                pyautogui.keyUp('down')
-                                break
-                        time.sleep(0.01)
-                        #pyautogui.moveRel(0, self.speed)
+        elif self.direction == "down":
+            if self.upPressed:
+                pyautogui.keyUp('up')
+                self.upPressed = False
+            if not self.downPressed:
+                pyautogui.keyDown('down')
+                self.downPressed = True
+                start_time = time.time()
+                while time.time() - start_time < config.TURNING_COOLDOWN:  #M: COOLDOWN: Ignore opposite direction signal for 0.5 seconds
+                    #pyautogui.moveRel(0, self.speed)
+                    eog_reader.signal.clear()  #M: clear queue to avoid getting old signals during cooldown
+                    time.sleep(0.01) # remove if working with moveRel
 
-        except Exception as e:
-            print(f"Error in move_continuously: {e}")  
+            # #After 0.5 s: keep moving UNTIL opposite direction signal received
+            # while True:
+            #     if not eog_reader.signal.empty():
+            #         self.checkingoppositedirection = eog_reader.signal.get()
+            #         if self.checkingoppositedirection == "up":
+            #             pyautogui.keyUp('down')
+            #             break
+            #     time.sleep(0.01)
+            #     #pyautogui.moveRel(0, self.speed)
+
+
+    # moving forward if double blink within 1 s
+    def move_forward(self):
+        current_time = time.time() # time-stamp as soon as blinked
+
+        #M: in case last_blink_time already existing (check for valid double blink):
+        if self.last_blink_time and (current_time - self.last_blink_time < 1): # First one i.o. to say that if last_b_t is None (as in init), skip
+            if self.wPressed:
+                pyautogui.keyUp('w')
+                print(f'W released')
+                self.wPressed = False
+            
+            else:
+                pyautogui.keyDown('w')
+                print(f'W pressed')
+                self.wPressed = True
+            
+            self.last_blink_time = None #M: reset after double blink
+
+        #M: if that was first blink within last second
+        else:
+            self.last_blink_time = current_time
+            print(f'{self.last_blink_time}: Attentive for second blink')
+
 
     #     try:
     #          counter = 0
@@ -151,82 +201,25 @@ class MouseReplacement(threading.Thread):
     #             self.mouse_thread.join() #M: stops main thread (from "signaling mousethread to stop" until "mouse thread actually stops")
     #     print("Mouse stopped moving, main thread continuing now")
 
-class KeyBoardReplacement(threading.Thread):
+# class KeyBoardReplacement(threading.Thread):
     
-    def __init__(self):
-        super().__init__()
-        self.running = True
-        pyautogui.FAILSAFE
+#     def __init__(self):
+#         super().__init__()
+#         self.running = True
+#         pyautogui.FAILSAFE
 
-    def run(self):
-        while self.running:
-            if not eog_reader.signal.empty():
-                self.move_forward()
-            time.sleep(0.01) # for CPU not jumping to 100%, should not b interfering with signal income or sth bc very short
+#     def run(self):
+#         while self.running:
+#             if not eog_reader.signal.empty():
+#                 self.move_forward()
+#             time.sleep(0.01) # for CPU not jumping to 100%, should not b interfering with signal income or sth bc very short
 
-    # moving forward when double blink within 1 s
-    def move_forward(self):
-        try:
-            while True:
-                if not eog_reader.signal.empty():
-                    self.direction = eog_reader.signal.get()
-                    if self.direction == "blink":
-                        eog_reader.signal.clear()
-                        time.sleep(0.05) #M: "0.05"-cooldown so it maybe doesnt take 1. blink twice
-                        start_time = time.time()
-                        print(f'blink-timer started')
-
-                        second_blink = False
-                        while time.time() - start_time < 1: #M: look for 2nd blink within 1 (+ 0.05) s; )
-                            if not eog_reader.signal.empty():
-                                self.direction = eog_reader.signal.get()
-                                if self.direction == "blink":
-                                    second_blink = True
-                                    pyautogui.keyDown('w')
-                                    print(f"Start W")
-                                    eog_reader.signal.clear()  #M: clear queue to avoid getting old signals during cooldown
-                                    time.sleep(0.5) #M: runs at least 0.5 s before player can stop moving forward to avoid eventual weird stuff  
-
-                                    #M: now wait on double blink to stop
-                                    while True:
-                                        if not eog_reader.signal.empty():
-                                            self.direction = eog_reader.signal.get()
-                                            if self.direction == "blink":
-                                                time.sleep(0.05)
-                                                start_time = time.time()
-                                                print(f'blink-stopping timer started')
-                                                eog_reader.signal.clear()
-
-                                                second_stop_blink = False
-                                                while time.time() - start_time < 1: #M: look for 2nd blink within 1 s; "0.05"-cooldown so it maybe doesnt take 1. blink twice
-                                                    if not eog_reader.signal.empty():
-                                                        self.direction = eog_reader.signal.get()
-                                                        if self.direction == "blink":
-                                                            second_stop_blink = True
-                                                            pyautogui.keyUp('w')
-                                                            print(f"Stop W")
-                                                            eog_reader.signal.clear()  #M: clear queue to avoid getting old signals during cooldown
-                                                    time.sleep(0.01)
-                                                if second_stop_blink:
-                                                    break
-                                                else:
-                                                    eog_reader.signal.clear()
-                                        time.sleep(0.01)
-
-                            time.sleep(0.01)
-
-                        if not second_blink:
-                            eog_reader.signal.clear()
-
-                time.sleep(0.01)
-                
-        except Exception as e:
-            print(f"Error in getting forward signal: {e}")
+    
 
             
 if __name__ == "__main__":
-    keyBoardReplacement = KeyBoardReplacement()
-    mouseReplacement = MouseReplacement()
+#    keyBoardReplacement = KeyBoardReplacement()
+    mouseKeyboardReplacement = MouseKeyboardReplacement()
 
 
     #Start thread

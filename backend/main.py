@@ -21,11 +21,11 @@ async def main():
    # appy_thread.start()
     #print(f"FastAPI started") 
 
-    mouse_thread = minecraft_control.MouseReplacement()
-    mouse_thread.start() #M: calls run() - method in minecraft_control in MouseReplacement
+    mouseKeyboard_thread = minecraft_control.MouseKeyboardReplacement()
+    mouseKeyboard_thread.start() #M: calls run() - method in minecraft_control in MouseReplacement
 
-    keyboard_thread = minecraft_control.KeyBoardReplacement()
-    keyboard_thread.start() #M: calls run() - method in minecraft_control in KeyboardReplacement
+    #keyboard_thread = minecraft_control.KeyBoardReplacement()
+    #keyboard_thread.start() #M: calls run() - method in minecraft_control in KeyboardReplacement
     
     print("> Mouse & Keyboard Replacement started")
 
