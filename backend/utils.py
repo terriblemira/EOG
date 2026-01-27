@@ -31,12 +31,20 @@ def spacebar_pressed(window, font, message="Press SPACEBAR to continue"):
     global startOfBreakTime #M: globals need to be declared AT BEGINNING of functions
     global setBreakMarker
     global endOfBreakTime
+
+    # clear queue before searching for double blinks etc.
+    while not eog_reader.signal.empty():
+        try:
+            eog_reader.signal.get_nowait()
+        except:
+            break
+
     window.fill(BG_COLOR)
     instruction_surf = font.render(message, True, WHITE)
     window.blit(instruction_surf, (window.get_width() // 2 - instruction_surf.get_width() // 2,
                                       window.get_height() // 2))
     pygame.display.flip()
-    #eog_reader.signal.clear()
+
     waiting = True
     startOfBreakTime = time.time() - start_time  #M: global variable to store timepoint of break start
     while waiting:
@@ -59,13 +67,14 @@ def spacebar_pressed(window, font, message="Press SPACEBAR to continue"):
                     last_blink = True
                 else:
                     time_difference = current_time - last_blink_time
-                    if time_difference < 1:  #M: double blink within 0.5 seconds
+                    if time_difference < 1.5:  #M: double blink within 0.5 seconds
                         print(f"Utils: Double blink detected, skipping test.")
                         test.calib_and_test_completed = True
                         pygame.quit()
                         return False  #M: return False in test.py if double blink detected
                     else: #M: not a double blink, just a single blink
                         last_blink_time = current_time #in case of more than 0.5 s passing in between: old second-blink turns new last-blink
+                        print(f'Utils: time_diff {time_difference: .3f} too long')
             # else:
             #     eog_reader.signal.clear()
         pygame.time.delay(100)
