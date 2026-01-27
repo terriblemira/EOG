@@ -132,6 +132,7 @@ def run_calibration(eog_reader, window, font, clock, WIDTH, HEIGHT): # variable 
             if redo_last_steps:
                 # Remove data from the last 4 steps
                 steps_to_remove = 4
+                print(f'Redoing last {steps_to_remove} steps of calibration...')
                 for step_idx in range(i-steps_to_remove, i):
                     if step_idx >= 0:
                         step_target = calibration_sequence[step_idx][0].lower()
