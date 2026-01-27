@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 from datetime import datetime# Create a shared, date-stamped results folder
 import os
 from config import * # * = import all
-from utils import wait_for_spacebar
+from utils import spacebar_pressed
 import os
 import time
 import pygame
@@ -88,7 +88,7 @@ def run_calibration(eog_reader, window, font, clock, WIDTH, HEIGHT): # variable 
     eog_reader.out_queue.clear()
 
     # Instructions for calibration
-    if not wait_for_spacebar(window, font, "Press SPACEBAR to begin calibration..."):
+    if not spacebar_pressed(window, font, "Press SPACEBAR to begin calibration..."):
         return {
             "baselines": {"H": 0, "V": 0},
             "thresholds": {"left": 0.1, "right": 0.1, "up": 0.1, "down": 0.1},
@@ -135,7 +135,7 @@ def run_calibration(eog_reader, window, font, clock, WIDTH, HEIGHT): # variable 
                 print(f'Redoing last {steps_to_remove} steps of calibration...')
 
                 i = 0
-                for i in range(4):  #M: Show redo message for 3 seconds
+                for i in range(3):  #M: Show redo message for 3 seconds
                     window.fill(BG_COLOR)
                     redo_surf = font.render("Redoing last sequence...", True, WHITE)
                     window.blit(redo_surf, (WIDTH // 2 - redo_surf.get_width() // 2, HEIGHT // 2 - 50))
@@ -754,7 +754,7 @@ def run_blink_calibration(eog_reader, window, font, clock, calibration_params, W
     BLINK_THRESHOLD = max(calibration_params["thresholds"]["down"],calibration_params["thresholds"]["up"]) * BLINK_THRESHOLD_MULTIPLIER  # Start with 1.5x(current BLINK_TR._M.) the up/down threshold
 
     # Wait for spacebar to start
-    if not wait_for_spacebar(window, font, "Blink Calibration: Press SPACEBAR to begin"):
+    if not spacebar_pressed(window, font, "Blink Calibration: Press SPACEBAR to begin"):
         return {"blink_threshold": BLINK_THRESHOLD}
 
     # Clear buffers

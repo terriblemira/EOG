@@ -21,19 +21,9 @@ async def main():
    # appy_thread.start()
     #print(f"FastAPI started") 
 
-    mouseKeyboard_thread = minecraft_control.MouseKeyboardReplacement()
-    mouseKeyboard_thread.start() #M: calls run() - method in minecraft_control in MouseReplacement
-
-    #keyboard_thread = minecraft_control.KeyBoardReplacement()
-    #keyboard_thread.start() #M: calls run() - method in minecraft_control in KeyboardReplacement
-    
-    print("> Mouse & Keyboard Replacement started")
-
-    await asyncio.sleep(1)
-
     webbrowser.open("http://localhost:8000/games")
 
-    await asyncio.sleep(10)
+    await asyncio.sleep(2)
 
     # # Initialize EOG reader 
     # det_queue = collections.deque(maxlen=50)
@@ -43,6 +33,14 @@ async def main():
     # eog.start() #M: start eog_reader (thread)
 
     test.main() #M: run main function from test
+
+    if test.calib_and_test_completed:
+        mouseKeyboard_thread = minecraft_control.MouseKeyboardReplacement()
+        mouseKeyboard_thread.start() #M: calls run() - method in minecraft_control in MouseReplacement
+    #keyboard_thread = minecraft_control.KeyBoardReplacement()
+    #keyboard_thread.start() #M: calls run() - method in minecraft_control in KeyboardReplacement    
+        print("> Mouse & Keyboard Replacement started")
+        await asyncio.sleep(1)
 
     while True:#M: Keep the main function alive (don't block the event loop)
         await asyncio.sleep(1)   #M: only this function sleeps(=waits) repeatedly for 1 second(-->forever) (so "restaurant(main function) is not closing but stays open" after last line of the function), other tasks working parallelly

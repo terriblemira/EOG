@@ -11,6 +11,7 @@ from config import DEBUG_PLOTS, BG_COLOR, WHITE, PLOT_BUFFER_DURATION, BLINK_THR
 from datetime import datetime
 from config import RESULTS_DIR
 import time
+import eog_reader
 csv_path = os.path.join(RESULTS_DIR, "eog_trial_results.csv")
 
 start_time = time.time() #M: store start time of program to calculate timepoints later
@@ -18,8 +19,9 @@ startOfBreakTime = 0  #M: global variable to store timepoint of break starting
 setBreakMarker = False  #M: global variable to mark breaks in data when spacebar pressed
 endOfBreakTime = 0  #M: global variable to store timepoint of break ending
 
-def wait_for_spacebar(window, font, message="Press SPACEBAR to continue"):
+def spacebar_pressed(window, font, message="Press SPACEBAR to continue"):
     """Display message and wait for SPACEBAR press"""
+    last_blink = False
     global startOfBreakTime #M: globals need to be declared AT BEGINNING of functions
     global setBreakMarker
     global endOfBreakTime
@@ -39,8 +41,24 @@ def wait_for_spacebar(window, font, message="Press SPACEBAR to continue"):
                 setBreakMarker = True  #M: set global variable to True when spacebar pressed (to mark breaks in data)
                 endOfBreakTime = time.time() - start_time #M: store timepoint of break ending
                 waiting = False
+        
+        if eog_reader.signal.not_empty():
+            direction = eog_reader.signal.get()
+            if direction == "blink":
+                time.sleep(0.01)
+                if not last_blink:
+                    last_blink_time = time.time()
+                    last_blink = True
+                else:
+                    second_blink_time = time.time()
+                    if second_blink_time - last_blink_time < 0.5:  #M: double blink within 0.5 seconds
+                        print("Double blink detected, skipping test.")
+                        pygame.quit()
+                        return False  #M: return False in test.py if double blink detected
+                    else: #M: not a double blink, just a single blink
+                        last_blink_time = second_blink_time #in case of more than 0.5 s passing in between: old second-blink turns new last-blink
         pygame.time.delay(100)
-    return True
+    return True # if spacebar pressed --> in test.py: "if not spacebar_pressed:" = "if not True" = "if False" --> skips if --> don't return out of main test function but stay
 
 def expected_from_name(name: str):
     """Return expected H and V directions for a given target name"""
