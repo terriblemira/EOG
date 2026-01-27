@@ -88,7 +88,7 @@ def run_calibration(eog_reader, window, font, clock, WIDTH, HEIGHT): # variable 
     eog_reader.out_queue.clear()
 
     # Instructions for calibration
-    if not spacebar_pressed(window, font, "Press SPACEBAR to begin calibration..."):
+    if not spacebar_pressed(window, font, "Press SPACEBAR to begin calibration... \n No double-blinking unless wanting to exit!"):
         return {
             "baselines": {"H": 0, "V": 0},
             "thresholds": {"left": 0.1, "right": 0.1, "up": 0.1, "down": 0.1},

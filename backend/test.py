@@ -269,8 +269,8 @@ def main():
 
         # Wait for SPACEBAR to exit
         spacebar_pressed(window, font, "Task complete! Press SPACEBAR to exit.")
-        pygame.quit()
         calib_and_test_completed = True
+        pygame.quit()
 
 # #starting EOG for AFTER testing
 #     print(f"Restarting EOG Reader for live detection...")

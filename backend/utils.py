@@ -11,6 +11,7 @@ from config import DEBUG_PLOTS, BG_COLOR, WHITE, PLOT_BUFFER_DURATION, BLINK_THR
 from datetime import datetime
 from config import RESULTS_DIR
 import time
+import test
 import eog_reader
 csv_path = os.path.join(RESULTS_DIR, "eog_trial_results.csv")
 
@@ -21,7 +22,12 @@ endOfBreakTime = 0  #M: global variable to store timepoint of break ending
 
 def spacebar_pressed(window, font, message="Press SPACEBAR to continue"):
     """Display message and wait for SPACEBAR press"""
-    last_blink = False
+    #debug
+    print(f"UTILS: Queue type: {type(eog_reader.signal)}")
+    print(f"Queue ID: {id(eog_reader.signal)}")
+    print(f"Has clear: {hasattr(eog_reader.signal, 'clear')}")
+    print(f"EOGReader ID: {id(eog_reader)}")
+    last_blink = None
     global startOfBreakTime #M: globals need to be declared AT BEGINNING of functions
     global setBreakMarker
     global endOfBreakTime
@@ -30,6 +36,7 @@ def spacebar_pressed(window, font, message="Press SPACEBAR to continue"):
     window.blit(instruction_surf, (window.get_width() // 2 - instruction_surf.get_width() // 2,
                                       window.get_height() // 2))
     pygame.display.flip()
+    #eog_reader.signal.clear()
     waiting = True
     startOfBreakTime = time.time() - start_time  #M: global variable to store timepoint of break start
     while waiting:
@@ -42,21 +49,25 @@ def spacebar_pressed(window, font, message="Press SPACEBAR to continue"):
                 endOfBreakTime = time.time() - start_time #M: store timepoint of break ending
                 waiting = False
         
-        if eog_reader.signal.not_empty():
+        while not eog_reader.signal.empty():
             direction = eog_reader.signal.get()
             if direction == "blink":
-                time.sleep(0.01)
-                if not last_blink:
-                    last_blink_time = time.time()
+                current_time = time.time()
+                print(f'Utils: first blink added to check for double')
+                if last_blink is None:
+                    last_blink_time = current_time
                     last_blink = True
                 else:
-                    second_blink_time = time.time()
-                    if second_blink_time - last_blink_time < 0.5:  #M: double blink within 0.5 seconds
-                        print("Double blink detected, skipping test.")
+                    time_difference = current_time - last_blink_time
+                    if time_difference < 1:  #M: double blink within 0.5 seconds
+                        print(f"Utils: Double blink detected, skipping test.")
+                        test.calib_and_test_completed = True
                         pygame.quit()
                         return False  #M: return False in test.py if double blink detected
                     else: #M: not a double blink, just a single blink
-                        last_blink_time = second_blink_time #in case of more than 0.5 s passing in between: old second-blink turns new last-blink
+                        last_blink_time = current_time #in case of more than 0.5 s passing in between: old second-blink turns new last-blink
+            # else:
+            #     eog_reader.signal.clear()
         pygame.time.delay(100)
     return True # if spacebar pressed --> in test.py: "if not spacebar_pressed:" = "if not True" = "if False" --> skips if --> don't return out of main test function but stay
 
