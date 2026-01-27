@@ -133,6 +133,16 @@ def run_calibration(eog_reader, window, font, clock, WIDTH, HEIGHT): # variable 
                 # Remove data from the last 4 steps
                 steps_to_remove = 4
                 print(f'Redoing last {steps_to_remove} steps of calibration...')
+
+                i = 0
+                for i in range(4):  #M: Show redo message for 3 seconds
+                    window.fill(BG_COLOR)
+                    redo_surf = font.render("Redoing last sequence...", True, WHITE)
+                    window.blit(redo_surf, (WIDTH // 2 - redo_surf.get_width() // 2, HEIGHT // 2 - 50))
+                    pygame.display.flip()
+                    i = i + 1
+                    time.sleep(1)
+
                 for step_idx in range(i-steps_to_remove, i):
                     if step_idx >= 0:
                         step_target = calibration_sequence[step_idx][0].lower()
