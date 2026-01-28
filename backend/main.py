@@ -22,7 +22,6 @@ async def main():
     #print(f"FastAPI started") 
 
     webbrowser.open("http://localhost:8000/games")
-
     await asyncio.sleep(2)
 
     # # Initialize EOG reader 
@@ -33,6 +32,7 @@ async def main():
     # eog.start() #M: start eog_reader (thread)
 
     test.main() #M: run main function from test
+    await test.main() # after finishing/skipping of test
 
    # if test.calib_and_test_completed:
     mouseKeyboard_thread = minecraft_control.MouseKeyboardReplacement()

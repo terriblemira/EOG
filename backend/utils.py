@@ -33,11 +33,15 @@ def spacebar_pressed(window, font, message="Press SPACEBAR to continue"):
     global endOfBreakTime
 
     # clear queue before searching for double blinks etc.
+    print(f'Utils: Clearing old signals from queue')
+    clear_count = 0
     while not eog_reader.signal.empty():
         try:
             eog_reader.signal.get_nowait()
+            clear_count += 1
         except:
             break
+    print(f'Utils: Cleared {clear_count} old signals from queue')
 
     window.fill(BG_COLOR)
     instruction_surf = font.render(message, True, WHITE)
@@ -45,8 +49,9 @@ def spacebar_pressed(window, font, message="Press SPACEBAR to continue"):
                                       window.get_height() // 2))
     pygame.display.flip()
 
-    waiting = True
     startOfBreakTime = time.time() - start_time  #M: global variable to store timepoint of break start
+
+    waiting = True
     while waiting:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -77,7 +82,7 @@ def spacebar_pressed(window, font, message="Press SPACEBAR to continue"):
                         print(f'Utils: time_diff {time_difference: .3f} too long')
             # else:
             #     eog_reader.signal.clear()
-        pygame.time.delay(100)
+        pygame.time.delay(10) #just alternative to time.sleep() (doesnt make much difference)
     return True # if spacebar pressed --> in test.py: "if not spacebar_pressed:" = "if not True" = "if False" --> skips if --> don't return out of main test function but stay
 
 def expected_from_name(name: str):

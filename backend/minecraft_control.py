@@ -37,6 +37,7 @@ class MouseKeyboardReplacement(threading.Thread):
 
                 if self.direction == "blink":
                     self.move_forward()
+                    self.direction = None  # reset direction after processing blink, not just queue, so can detect other directions
                 else:
                     self.move_continuously()
             time.sleep(0.01) # for CPU not jumping to 100%, should not b interfering with signal income or sth bc very short
