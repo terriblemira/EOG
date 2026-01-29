@@ -8,6 +8,7 @@ from datetime import datetime# Create a shared, date-stamped results folder
 import os
 from config import * # * = import all
 from utils import spacebar_pressed
+import utils
 import os
 import time
 import pygame
@@ -34,7 +35,7 @@ def run_calibration(eog_reader, window, font, clock, WIDTH, HEIGHT): # variable 
         window.blit(rest_surf, (WIDTH // 2 - rest_surf.get_width() // 2, HEIGHT // 2 - 50))
 
         if redo_option:
-            redo_surf = font.render("Press R to redo the last 4 steps", True, WHITE)
+            redo_surf = font.render("Double blink to redo the last 4 steps", True, WHITE)
             window.blit(redo_surf, (WIDTH // 2 - redo_surf.get_width() // 2, HEIGHT // 2 + 50))
 
         pygame.display.flip()
@@ -109,9 +110,21 @@ def run_calibration(eog_reader, window, font, clock, WIDTH, HEIGHT): # variable 
             # Show rest message with redo option
             show_rest_screen(redo_option=True)
 
+          # Clear old signals before starting rest period
+            print("Clearing old signals before rest...")
+            cleared = 0
+            while not eog_reader.signal.empty():
+                try:
+                    eog_reader.signal.get_nowait()
+                    cleared += 1
+                except:
+                    break
+            print(f"Cleared {cleared} old signals")
+
             # Wait for 5 seconds or for user input
             rest_start_time = time.time()
             redo_last_steps = False
+            last_blink_time = None
 
             while time.time() - rest_start_time < 5.0 and not redo_last_steps:
                 # Process events during rest period
@@ -122,9 +135,14 @@ def run_calibration(eog_reader, window, font, clock, WIDTH, HEIGHT): # variable 
                             "thresholds": {"left": 0.1, "right": 0.1, "up": 0.1, "down": 0.1},
                             "channel_norm_factors": {"ch1": 1, "ch2": 1, "ch3": 1, "ch5": 1}
                         }
-                    elif event.type == pygame.KEYDOWN:
-                        if event.key == pygame.K_r:  # If 'R' is pressed
+                    # elif event.type == pygame.KEYDOWN:
+                    #     if event.key == pygame.K_r:  # If 'R' is pressed
+                is_double, last_blink_time = utils.check_double_blink(last_blink_time)
+                if is_double:
                             redo_last_steps = True
+                            print(f'Utils/Calib: double blink detected. Redoing 4 steps')
+                            break
+                time.sleep(0.01)
 
                 pygame.event.pump()
                 clock.tick(60)  # Keep the game loop running
@@ -140,7 +158,7 @@ def run_calibration(eog_reader, window, font, clock, WIDTH, HEIGHT): # variable 
                     redo_surf = font.render("Redoing last sequence...", True, WHITE)
                     window.blit(redo_surf, (WIDTH // 2 - redo_surf.get_width() // 2, HEIGHT // 2 - 50))
                     pygame.display.flip()
-                    i = i + 1
+                    i += 1
                     time.sleep(1)
 
                 for step_idx in range(i-steps_to_remove, i):
