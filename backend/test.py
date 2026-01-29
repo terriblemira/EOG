@@ -82,10 +82,50 @@ def main():
     print(f"Channel norm factors: {calibration_params['channel_norm_factors']}")
     print(f"Alpha: {calibration_params['alpha']:.4f}")
 
-    # Wait for user to start test (#M in utils: spacebar_pressed function with double blink to skip test (quit game))
-    # if spacebar not pressed within 100 s delay, exit main function, else: center_pos = ... (go on with test)
-    if not spacebar_pressed(window, font, "Calibration complete! Press SPACEBAR to start the test. Double blink quick to skip test") == True: 
-        return
+ # Create a function to display the rest screen with options
+    def show_rest_screen(skip_option=False):
+        window.fill(BG_COLOR)
+        rest_surf = font.render("Calibration complete! Test starts in 5 seconds", True, WHITE)
+        window.blit(rest_surf, (WIDTH // 2 - rest_surf.get_width() // 2, HEIGHT // 2 - 50))
+
+        if skip_option:
+            skip_surf = font.render("Double blink to skip test", True, WHITE)
+            window.blit(skip_surf, (WIDTH // 2 - skip_surf.get_width() // 2, HEIGHT // 2 + 50))
+        
+        pygame.display.flip()
+
+    show_rest_screen(skip_option=True)
+
+    # Clear old signals before starting rest period
+    print("Clearing old signals before rest...")
+    cleared = 0
+    while not eog_thread.signal.empty():
+        try:
+            eog_thread.signal.get_nowait()
+            cleared += 1
+        except:
+            break
+    print(f"Test: Cleared {cleared} old signals")
+
+        # Wait for 5 seconds or for user input
+    rest_start_time = time.time()
+    redo_last_steps = False
+    last_blink_time = None
+
+    while time.time() - rest_start_time < 5.0:
+        is_double, last_blink_time = utils.check_double_blink(last_blink_time)
+        if is_double:
+            pygame.quit()
+            print(f'Utils/Test: double blink detected. Skip test.')
+            break
+
+        pygame.event.pump()
+        time.sleep(0.01)
+        
+    # # Wait for user to start test (#M in utils: spacebar_pressed function with double blink to skip test (quit game))
+    # # if spacebar not pressed within 100 s delay, exit main function, else: center_pos = ... (go on with test)
+    # if not spacebar_pressed(window, font, "Calibration complete! Press SPACEBAR to start the test. Double blink quick to skip test") == True: 
+    #     return
     
        # Define target sequences
     center_pos = [WIDTH // 2, HEIGHT // 2]

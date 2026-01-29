@@ -34,19 +34,15 @@ def check_double_blink(last_blink_time):
                 if current_time - last_blink_time < 1.5:
                     last_blink_time = None
                     return True
-                else:
-                    print(f'Utils: duration too long. Was just single blink')
+                else: # if over 1.5 s
+                    time_difference = current_time - last_blink_time
+                    print(f'Utils: time_diff {time_difference: .3f} too long')
                     last_blink_time = current_time
                     return False, last_blink_time
     return False, last_blink_time
 
 def spacebar_pressed(window, font, message="Press SPACEBAR to continue"):
     """Display message and wait for SPACEBAR press"""
-    #debug
-    print(f"UTILS: Queue type: {type(eog_reader.signal)}")
-    print(f"Queue ID: {id(eog_reader.signal)}")
-    print(f"Has clear: {hasattr(eog_reader.signal, 'clear')}")
-    print(f"EOGReader ID: {id(eog_reader)}")
     last_blink_time = None
     global startOfBreakTime #M: globals need to be declared AT BEGINNING of functions
     global setBreakMarker
@@ -82,24 +78,24 @@ def spacebar_pressed(window, font, message="Press SPACEBAR to continue"):
                 endOfBreakTime = time.time() - start_time #M: store timepoint of break ending
                 waiting = False
         
-        while not eog_reader.signal.empty():
-            direction = eog_reader.signal.get()
-            if direction == "blink":
-                current_time = time.time()
-                print(f'Utils: first blink added to check for double')
-                if last_blink is None:
-                    last_blink_time = current_time
-                    last_blink = True
-                else:
-                    time_difference = current_time - last_blink_time
-                    if time_difference < 1.5:  #M: double blink within 0.5 seconds
-                        print(f"Utils: Double blink detected, skipping test.")
-                        test.calib_and_test_completed = True
-                        pygame.quit()
-                        return False  #M: return False in test.py if double blink detected
-                    else: #M: not a double blink, just a single blink
-                        last_blink_time = current_time #in case of more than 0.5 s passing in between: old second-blink turns new last-blink
-                        print(f'Utils: time_diff {time_difference: .3f} too long')
+        # while not eog_reader.signal.empty():
+        #     direction = eog_reader.signal.get()
+        #     if direction == "blink":
+        #         current_time = time.time()
+        #         print(f'Utils: first blink added to check for double')
+        #         if last_blink is None:
+        #             last_blink_time = current_time
+        #             last_blink = True
+        #         else:
+        #             time_difference = current_time - last_blink_time
+        #             if time_difference < 1.5:  #M: double blink within 0.5 seconds
+        #                 print(f"Utils: Double blink detected, skipping test.")
+        #                 test.calib_and_test_completed = True
+        #                 pygame.quit()
+        #                 return False  #M: return False in test.py if double blink detected
+        #             else: #M: not a double blink, just a single blink
+        #                 last_blink_time = current_time #in case of more than 0.5 s passing in between: old second-blink turns new last-blink
+        #                 print(f'Utils: time_diff {time_difference: .3f} too long')
             # else:
             #     eog_reader.signal.clear()
         pygame.time.delay(10) #just alternative to time.sleep() (doesnt make much difference)

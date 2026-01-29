@@ -9,7 +9,6 @@ import os
 from config import * # * = import all
 from utils import spacebar_pressed
 import utils
-import os
 import time
 import pygame
 
@@ -129,12 +128,14 @@ def run_calibration(eog_reader, window, font, clock, WIDTH, HEIGHT): # variable 
             while time.time() - rest_start_time < 5.0 and not redo_last_steps:
                 # Process events during rest period
                 for event in pygame.event.get():
-                    if event.type == pygame.QUIT:
-                        return {
-                            "baselines": {"H": 0, "V": 0},
-                            "thresholds": {"left": 0.1, "right": 0.1, "up": 0.1, "down": 0.1},
-                            "channel_norm_factors": {"ch1": 1, "ch2": 1, "ch3": 1, "ch5": 1}
-                        }
+                    # if event.type == pygame.QUIT:
+                    if event.type == pygame.KEYDOWN:
+                        if event.key == pygame.K_q:  # If 'Q' is pressed                        
+                            return {
+                                "baselines": {"H": 0, "V": 0},
+                                "thresholds": {"left": 0.1, "right": 0.1, "up": 0.1, "down": 0.1},
+                                "channel_norm_factors": {"ch1": 1, "ch2": 1, "ch3": 1, "ch5": 1}
+                            }
                     # elif event.type == pygame.KEYDOWN:
                     #     if event.key == pygame.K_r:  # If 'R' is pressed
                 is_double, last_blink_time = utils.check_double_blink(last_blink_time)
@@ -142,11 +143,11 @@ def run_calibration(eog_reader, window, font, clock, WIDTH, HEIGHT): # variable 
                             redo_last_steps = True
                             print(f'Utils/Calib: double blink detected. Redoing 4 steps')
                             break
-                time.sleep(0.01)
 
                 pygame.event.pump()
                 clock.tick(60)  # Keep the game loop running
-            # If user pressed 'R', redo the last 4 steps
+                
+            # If user double-blinks, redo the last 4 steps
             if redo_last_steps:
                 # Remove data from the last 4 steps
                 steps_to_remove = 4
