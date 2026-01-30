@@ -44,13 +44,13 @@ def init_pygame():
     font_size = int(HEIGHT *0.05) # 3% of screen height
     font = pygame.font.SysFont(None, font_size)
 
-    return window, WIDTH, HEIGHT, font_size, font, clock
+    return window, WIDTH, HEIGHT, font, clock, actual_width, actual_height
 
 
-def check_double_blink(last_blink_time):
+def check_double_blink(eog_thread, last_blink_time):
 
-    while not eog_reader.signal.empty():
-        direction = eog_reader.signal.get()
+    while not eog_thread.signal.empty():
+        direction = eog_thread.signal.get()
         if direction == 'blink':
             current_time = time.time()
             if last_blink_time is None:
@@ -60,7 +60,7 @@ def check_double_blink(last_blink_time):
             else:
                 if current_time - last_blink_time < 1.5:
                     last_blink_time = None
-                    return True
+                    return True, last_blink_time
                 else: # if over 1.5 s
                     time_difference = current_time - last_blink_time
                     print(f'Utils: time_diff {time_difference: .3f} too long')
@@ -68,7 +68,7 @@ def check_double_blink(last_blink_time):
                     return False, last_blink_time
     return False, last_blink_time
 
-def spacebar_pressed(window, font, message="Press SPACEBAR to continue"):
+def spacebar_pressed(eog_thread, window, font, message="Press SPACEBAR to continue"):
     """Display message and wait for SPACEBAR press"""
     last_blink_time = None
     global startOfBreakTime #M: globals need to be declared AT BEGINNING of functions
@@ -78,9 +78,9 @@ def spacebar_pressed(window, font, message="Press SPACEBAR to continue"):
     # clear queue before searching for double blinks etc.
     print(f'Utils: Clearing old signals from queue')
     clear_count = 0
-    while not eog_reader.signal.empty():
+    while not eog_thread.signal.empty():
         try:
-            eog_reader.signal.get_nowait()
+            eog_thread.signal.get_nowait()
             clear_count += 1
         except:
             break

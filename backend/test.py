@@ -15,37 +15,14 @@ import utils
 from datetime import datetime
 import os
 import json
-from calibration import eog_thread
 
 RESULTS_DIR = os.path.join("results", datetime.now().strftime("%Y%m%d_%H%M%S"))
 os.makedirs(RESULTS_DIR, exist_ok=True)
 
 #START MAIN-Function
 #M: async def main():
-def run_test():
-    """Main application function"""
-    # Initialize Pygame
-    pygame.init()
-    calib_and_test_completed = False
-    # Get screen dimensions
-    screen_info = pygame.display.Info()
-    SCREEN_WIDTH, SCREEN_HEIGHT = screen_info.current_w, screen_info.current_h
-
-    window = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.FULLSCREEN)
-    pygame.display.set_caption("Static Jumps + EOG Accuracy Test. Don't double blink unless wanting to exit")
-
-    actual_width, actual_height = pygame.display.get_window_size()
-    print(f"Actual window dimensions: {actual_width}x{actual_height}")
-
-    # Use the actual dimensions for everything
-    WIDTH = actual_width
-    HEIGHT = actual_height
-    
-    clock = pygame.time.Clock()
-    font_size = int(HEIGHT *0.05) # 3% of screen height
-    font = pygame.font.SysFont(None, font_size)
-
-   
+def run_test(eog_thread, calibration_params, window, font, clock, WIDTH, HEIGHT,  saved_calibration_data, actual_width, actual_height):
+ 
  # Create a function to display the rest screen with options
     def show_rest_screen(skip_option=False):
         window.fill(BG_COLOR)
@@ -77,7 +54,7 @@ def run_test():
     last_blink_time = None
 
     while time.time() - rest_start_time < 5.0:
-        is_double, last_blink_time = utils.check_double_blink(last_blink_time)
+        is_double, last_blink_time = utils.check_double_blink(eog_thread, last_blink_time)
         if is_double:
             pygame.quit()
             print(f'Utils/Test: double blink detected. Skip test.')
@@ -159,8 +136,8 @@ def run_test():
             first_v_det = None
 
             # Process all detections in the queue
-            while det_queue:
-                det = det_queue.popleft()
+            while eog_thread.out_queue:
+                det = eog_thread.out_queue.popleft()
                 if det.is_horizontal and first_h_det is None:
                     first_h_det = det
                 elif not det.is_horizontal and first_v_det is None:
@@ -232,8 +209,8 @@ def run_test():
                 current_expected = expected_from_name(sequence[step_index][0])
 
                 # Clear the detection queue before the next step
-                while det_queue:
-                    det_queue.popleft()
+                while eog_thread.out_queue:
+                    eog_thread.out_queue.popleft()
 
             # Draw the interface
             window.fill(BG_COLOR)
@@ -272,7 +249,7 @@ def run_test():
         pygame.display.flip()
 
         # Wait for SPACEBAR to exit
-        spacebar_pressed(window, font, "Task complete! Press SPACEBAR to exit.")
+        spacebar_pressed(eog_thread, window, font, "Task complete! Press SPACEBAR to exit.")
         calib_and_test_completed = True
         pygame.quit()
 

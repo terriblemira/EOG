@@ -9,8 +9,9 @@ import time
 import config
 
 class MouseKeyboardReplacement(threading.Thread):
-    def __init__(self):
+    def __init__(self, eog_reader):
         super().__init__()
+        self.eog_reader = eog_reader #M: "THIS eog_thread is the same as the one up in the brackets (reference, not starting new) --> eog_reader in brackets is referenced to eog_thread in main.py
         self.running = True
         self.speed = 10
         self.last_blink_time = None

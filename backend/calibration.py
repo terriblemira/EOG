@@ -15,7 +15,6 @@ import pygame
 from eog_reader import EOGReader
 import collections
 from scipy.signal import find_peaks
-from main import blink_calibration_results
 
 
 RESULTS_DIR = os.path.join("results", datetime.now().strftime("%Y%m%d_%H%M%S"))
@@ -118,10 +117,10 @@ def run_calibration(eog_thread, window, font, clock, WIDTH, HEIGHT): # variable 
     }
 
     # Clear the detection queue
-    eog_reader.out_queue.clear()
+    eog_thread.out_queue.clear()
 
     # Instructions for calibration
-    if not spacebar_pressed(window, font, "Press SPACEBAR to begin calibration... \n No double-blinking unless wanting to exit!"):
+    if not spacebar_pressed(eog_thread, window, font, "Press SPACEBAR to begin calibration... \n No double-blinking unless wanting to exit!"):
         return {
             "baselines": {"H": 0, "V": 0},
             "thresholds": {"left": 0.1, "right": 0.1, "up": 0.1, "down": 0.1},
@@ -167,11 +166,12 @@ def run_calibration(eog_thread, window, font, clock, WIDTH, HEIGHT): # variable 
                             return {
                                 "baselines": {"H": 0, "V": 0},
                                 "thresholds": {"left": 0.1, "right": 0.1, "up": 0.1, "down": 0.1},
-                                "channel_norm_factors": {"ch1": 1, "ch2": 1, "ch3": 1, "ch5": 1}
+                                "channel_norm_factors": {"ch1": 1, "ch2": 1, "ch3": 1, "ch5": 1},
+                                "alpha": 0.0
                             }
                     # elif event.type == pygame.KEYDOWN:
                     #     if event.key == pygame.K_r:  # If 'R' is pressed
-                is_double, last_blink_time = utils.check_double_blink(last_blink_time)
+                is_double, last_blink_time = utils.check_double_blink(eog_thread, last_blink_time)
                 if is_double:
                             redo_last_steps = True
                             print(f'Utils/Calib: double blink detected. Redoing 4 steps')
@@ -229,7 +229,7 @@ def run_calibration(eog_thread, window, font, clock, WIDTH, HEIGHT): # variable 
         print(f"Recording {target_name} for 3 seconds...")
         sample_count = 0
         while time.time() < end_time:
-            samples, timestamps = eog_reader.inlet.pull_chunk(timeout=0.1, max_samples=FS)
+            samples, timestamps = eog_thread.inlet.pull_chunk(timeout=0.1, max_samples=FS)
             if samples:
                 samples = np.array(samples)
                 step_samples_ch1.extend(samples[:, 0])
@@ -795,7 +795,7 @@ def detect_blinks_in_signal(V, FS, v_threshold, BLINK_MIN_DURATION, BLINK_MAX_DU
 
     return blink_samples
 
-def run_blink_calibration(eog_reader, window, font, clock, calibration_params, WIDTH, HEIGHT):
+def run_blink_calibration(eog_thread, window, font, clock, calibration_params, WIDTH, HEIGHT):
     """
     Run blink calibration AFTER H/V calibration.
     Uses process_eog_signals to get clean H and V signals.
@@ -813,7 +813,7 @@ def run_blink_calibration(eog_reader, window, font, clock, calibration_params, W
 
     for c in range(5):  #M: Show redo message for 3 seconds; i already used for different loop here!! 
         window.fill(BG_COLOR)
-        blink_rest_surf = font.render("Blink Calibration: Press SPACEBAR to begin", True, WHITE)
+        blink_rest_surf = font.render("Blink Calibration: Begins in 5 seconds", True, WHITE)
         window.blit(blink_rest_surf, (WIDTH // 2 - blink_rest_surf.get_width() // 2, HEIGHT // 2 - 50))
         pygame.display.flip()
         time.sleep(1)
@@ -824,10 +824,10 @@ def run_blink_calibration(eog_reader, window, font, clock, calibration_params, W
 
     # Clear buffers
     for i in range(TOTAL_CHANNELS):
-        eog_reader.channel_buffers[i].clear()
-        eog_reader.detect_channel_buffers[i].clear()
-    eog_reader.time_buffer.clear()
-    eog_reader.detect_time_buffer.clear()
+        eog_thread.channel_buffers[i].clear()
+        eog_thread.detect_channel_buffers[i].clear()
+    eog_thread.time_buffer.clear()
+    eog_thread.detect_time_buffer.clear()
 
     # Configuration parameters
     total_prompts = 10  # Fixed to ensure we get exactly 10 prompts
@@ -937,7 +937,7 @@ def run_blink_calibration(eog_reader, window, font, clock, calibration_params, W
             pygame.display.flip()
 
         # Collect EOG data continuously
-        samples, timestamps = eog_reader.inlet.pull_chunk(timeout=0.01, max_samples=FS)
+        samples, timestamps = eog_thread.inlet.pull_chunk(timeout=0.01, max_samples=FS)
         if samples:
             samples = np.array(samples)
             all_ch1.extend(samples[:, 0])
