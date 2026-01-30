@@ -20,6 +20,33 @@ startOfBreakTime = 0  #M: global variable to store timepoint of break starting
 setBreakMarker = False  #M: global variable to mark breaks in data when spacebar pressed
 endOfBreakTime = 0  #M: global variable to store timepoint of break ending
 
+# start pygame for calibration and testing
+def init_pygame():
+    """Main application function"""
+    # Initialize Pygame
+    pygame.init()
+    calib_and_test_completed = False
+    # Get screen dimensions
+    screen_info = pygame.display.Info()
+    SCREEN_WIDTH, SCREEN_HEIGHT = screen_info.current_w, screen_info.current_h
+
+    window = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.FULLSCREEN)
+    pygame.display.set_caption("Static Jumps + EOG Accuracy Test. Don't double blink unless wanting to exit")
+
+    actual_width, actual_height = pygame.display.get_window_size()
+    print(f"Actual window dimensions: {actual_width}x{actual_height}")
+
+    # Use the actual dimensions for everything
+    WIDTH = actual_width
+    HEIGHT = actual_height
+    
+    clock = pygame.time.Clock()
+    font_size = int(HEIGHT *0.05) # 3% of screen height
+    font = pygame.font.SysFont(None, font_size)
+
+    return window, WIDTH, HEIGHT, font_size, font, clock
+
+
 def check_double_blink(last_blink_time):
 
     while not eog_reader.signal.empty():

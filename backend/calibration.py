@@ -10,11 +10,44 @@ from config import * # * = import all
 from utils import spacebar_pressed
 import utils
 import time
+import json
 import pygame
+from eog_reader import EOGReader
+import collections
+from scipy.signal import find_peaks
+from main import blink_calibration_results
 
-def run_calibration(eog_reader, window, font, clock, WIDTH, HEIGHT): # variable eog_reader in calibration.py = variable eog_thread in test.py (main "grabs" eog_reader from calibration and uses it as eog_thread)
+
+RESULTS_DIR = os.path.join("results", datetime.now().strftime("%Y%m%d_%H%M%S"))
+os.makedirs(RESULTS_DIR, exist_ok=True)
+
+ # merge, update from default in eog_reader and save calibration data
+def save_and_update_calib_data(eog_thread, calibration_params, blink_calibration_results):  
+    calibration_params['blink_threshold'] = blink_calibration_results['blink_threshold']
+    calibration_params_file = os.path.join(RESULTS_DIR, "calibration_parameters.json") # saving calibration parameters to json file
+    with open(calibration_params_file, 'w') as f:
+        json.dump(calibration_params, f, indent=4)
+    print(f"Saved calibration parameters to {calibration_params_file}")
+
+    print(f"\nCalibration complete:")
+    print(f"Baselines: {calibration_params['baselines']}")
+    print(f"Thresholds: {calibration_params['thresholds']}")
+    print(f"Channel norm factors: {calibration_params['channel_norm_factors']}")
+    print(f"Alpha: {calibration_params['alpha']:.4f}")
+
+    # Update parameters in eog_reader from default to final parameters 
+    eog_thread.calibration_params = calibration_params
+
+    return calibration_params
+
+
+def run_calibration(eog_thread, window, font, clock, WIDTH, HEIGHT): # variable eog_thread in calibration.py = variable eog_thread in test.py (main "grabs" eog_reader from calibration and uses it as eog_thread)
     global is_calib_running
     is_calib_running = True
+
+    #M: record raw calibration data for saving later
+    eog_thread.raw_log = []
+    eog_thread.record_raw = True
 
     # Get the actual window dimensions
     actual_width, actual_height = pygame.display.get_window_size()
@@ -112,9 +145,9 @@ def run_calibration(eog_reader, window, font, clock, WIDTH, HEIGHT): # variable 
           # Clear old signals before starting rest period
             print("Clearing old signals before rest...")
             cleared = 0
-            while not eog_reader.signal.empty():
+            while not eog_thread.signal.empty():
                 try:
-                    eog_reader.signal.get_nowait()
+                    eog_thread.signal.get_nowait()
                     cleared += 1
                 except:
                     break
@@ -153,13 +186,11 @@ def run_calibration(eog_reader, window, font, clock, WIDTH, HEIGHT): # variable 
                 steps_to_remove = 4
                 print(f'Redoing last {steps_to_remove} steps of calibration...')
 
-                i = 0
-                for i in range(3):  #M: Show redo message for 3 seconds
+                for c in range(3):  #M: Show redo message for 3 seconds; i already used for different loop here!! 
                     window.fill(BG_COLOR)
                     redo_surf = font.render("Redoing last sequence...", True, WHITE)
                     window.blit(redo_surf, (WIDTH // 2 - redo_surf.get_width() // 2, HEIGHT // 2 - 50))
                     pygame.display.flip()
-                    i += 1
                     time.sleep(1)
 
                 for step_idx in range(i-steps_to_remove, i):
@@ -247,14 +278,22 @@ def run_calibration(eog_reader, window, font, clock, WIDTH, HEIGHT): # variable 
     }
 
     plot_calibration_signals(calibration_data, channel_norm_factors, baselines, formatted_thresholds, alpha)
-    is_calib_running = False
+    is_calib_running = False #M: not being used atm.
 
-    return {
+    eog_thread.record_raw = False
+    eog_thread.save_raw_data(os.path.join(RESULTS_DIR, "calibration_raw_signals.csv"))
+    #samples, timestamps = eog_thread.inlet.pull_chunk(timeout=0.01)
+    #eog_thread.calibration_params = calibration_params # Update calibration params in EOG Reader from default to new
+    #M: idea for saved csv instead of live: from utils import startOfBreakingTime, endOfBreakingTime) "while startOfBreakingTime is not 0: get startOfBreakingTime" - startofBreakingTime and save in csv alongside raw data"
+
+    calibration_params = {
         "baselines": baselines,
         "thresholds": formatted_thresholds,
         "channel_norm_factors": channel_norm_factors,
         "alpha": alpha
     }
+
+    return calibration_params
 
 def is_valid_step(step): #steps in calibration swequence (left to center is a step, center to right, etc.)
     """Check if a step is a valid list or array of samples."""
@@ -762,19 +801,26 @@ def run_blink_calibration(eog_reader, window, font, clock, calibration_params, W
     Uses process_eog_signals to get clean H and V signals.
     Calculates blink threshold from processed vertical signal.
     """
-    import pygame
-    import time
-    import numpy as np
-    from scipy.signal import find_peaks
-    from signal_processing_wavelet import process_eog_signals
+
+    # clear detection queue from old calibration signals and start new for raw data saving
+    eog_thread.out_queue.clear()
+    eog_thread.raw_log = []
+    eog_thread.record_raw = True
 
     print("Starting blink calibration...")
 
     BLINK_THRESHOLD = max(calibration_params["thresholds"]["down"],calibration_params["thresholds"]["up"]) * BLINK_THRESHOLD_MULTIPLIER  # Start with 1.5x(current BLINK_TR._M.) the up/down threshold
 
-    # Wait for spacebar to start
-    if not spacebar_pressed(window, font, "Blink Calibration: Press SPACEBAR to begin"):
-        return {"blink_threshold": BLINK_THRESHOLD}
+    for c in range(5):  #M: Show redo message for 3 seconds; i already used for different loop here!! 
+        window.fill(BG_COLOR)
+        blink_rest_surf = font.render("Blink Calibration: Press SPACEBAR to begin", True, WHITE)
+        window.blit(blink_rest_surf, (WIDTH // 2 - blink_rest_surf.get_width() // 2, HEIGHT // 2 - 50))
+        pygame.display.flip()
+        time.sleep(1)
+
+    # # Wait for spacebar to start
+    # if not spacebar_pressed(window, font, "Blink Calibration: Press SPACEBAR to begin"):
+    #     return {"blink_threshold": BLINK_THRESHOLD}
 
     # Clear buffers
     for i in range(TOTAL_CHANNELS):
@@ -961,16 +1007,34 @@ def run_blink_calibration(eog_reader, window, font, clock, calibration_params, W
             print(f"- Mean peak amplitude: {mean_peak:.3f}")
             print(f"- Std dev of peaks: {std_peak:.3f}")
             print(f"- Calculated blink threshold: {blink_threshold:.3f}")
+
+            #M: stop recording signal for raw data saving
+            eog_thread.record_raw = False
+            eog_thread.save_raw_data(os.path.join(RESULTS_DIR, "blink_calibration_raw_signals.csv"))
+
             return {"blink_threshold": blink_threshold}
+        
         else:
             print(f"Warning: Only {len(blink_samples)} valid blinks detected (minimum {BLINK_MIN_SAMPLES} required)")
             print("Using default blink threshold")
+
+            #M: stop recording signal for raw data saving
+            eog_thread.record_raw = False
+            eog_thread.save_raw_data(os.path.join(RESULTS_DIR, "blink_calibration_raw_signals.csv"))
+
             return {"blink_threshold": BLINK_THRESHOLD}
+
     except Exception as e:
         print(f"Error calculating blink threshold: {e}")
         import traceback
         traceback.print_exc()
+
+        #M: stop recording signal for raw data saving
+        eog_thread.record_raw = False
+        eog_thread.save_raw_data(os.path.join(RESULTS_DIR, "blink_calibration_raw_signals.csv"))
+
         return {"blink_threshold": BLINK_THRESHOLD}
+    
 
 def plot_blink_calibration(V_compensated, times, blink_samples, title="Blink Calibration"):
     """

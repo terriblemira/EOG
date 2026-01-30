@@ -15,13 +15,14 @@ import utils
 from datetime import datetime
 import os
 import json
+from calibration import eog_thread
 
 RESULTS_DIR = os.path.join("results", datetime.now().strftime("%Y%m%d_%H%M%S"))
 os.makedirs(RESULTS_DIR, exist_ok=True)
 
 #START MAIN-Function
 #M: async def main():
-def main():
+def run_test():
     """Main application function"""
     # Initialize Pygame
     pygame.init()
@@ -44,44 +45,7 @@ def main():
     font_size = int(HEIGHT *0.05) # 3% of screen height
     font = pygame.font.SysFont(None, font_size)
 
-    # Initialize EOG reader
-    det_queue = collections.deque(maxlen=50)
-    eog_thread = EOGReader(det_queue) #creating an instance of EOGReader class with det_queue as argument (used in the __init__ method (--> variable self.out_queue IS det_queue for this EOGReader instance (for eog_thread).)
-    #M added:
-    #M:MAYBE back in: eog.eventLoop = asyncio.get_event_loop() #M: Websocket Setup
-    #await eog.connect_to_webapp() #M: verbindet & hält Verbindung zu app.py
-    eog_thread.start() #M: start eog_reader (thread) with default calibration_params (default thresholds, etc.)
-
-    # Run calibration
-
-    eog_thread.raw_log = []
-    eog_thread.record_raw = True
-    calibration_params = run_calibration(eog_thread, window, font, clock, WIDTH, HEIGHT) #runs function with parameters in brackets and saves outcome as "(test.)calibration_params" (eog.calibration_params not changed yet!)
-    eog_thread.record_raw = False
-    eog_thread.save_raw_data(os.path.join(RESULTS_DIR, "calibration_raw_signals.csv"))
-    #samples, timestamps = eog_thread.inlet.pull_chunk(timeout=0.01)
-    #eog_thread.calibration_params = calibration_params # Update calibration params in EOG Reader from default to new
-    #M: idea for saved csv instead of live: from utils import startOfBreakingTime, endOfBreakingTime) "while startOfBreakingTime is not 0: get startOfBreakingTime" - startofBreakingTime and save in csv alongside raw data"
-    
-    eog_thread.out_queue.clear()
-    eog_thread.raw_log = []
-    eog_thread.record_raw = True
-    blink_calibration_results = run_blink_calibration(eog_thread, window, font, clock, calibration_params, WIDTH, HEIGHT)
-    eog_thread.record_raw = False
-    eog_thread.save_raw_data(os.path.join(RESULTS_DIR, "blink_calibration_raw_signals.csv"))
-    calibration_params['blink_threshold'] = blink_calibration_results['blink_threshold']
-    calibration_params_file = os.path.join(RESULTS_DIR, "calibration_parameters.json") # saving calibration parameters to json file
-    with open(calibration_params_file, 'w') as f:
-        json.dump(calibration_params, f, indent=4)
-    print(f"Saved calibration parameters to {calibration_params_file}")
-    eog_thread.calibration_params = calibration_params # Update calibration params in EOG Reader from default to new
-
-    print(f"\nCalibration complete:")
-    print(f"Baselines: {calibration_params['baselines']}")
-    print(f"Thresholds: {calibration_params['thresholds']}")
-    print(f"Channel norm factors: {calibration_params['channel_norm_factors']}")
-    print(f"Alpha: {calibration_params['alpha']:.4f}")
-
+   
  # Create a function to display the rest screen with options
     def show_rest_screen(skip_option=False):
         window.fill(BG_COLOR)
