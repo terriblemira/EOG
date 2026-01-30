@@ -3,12 +3,14 @@ import asyncio
 import uvicorn 
 from eog_reader import EOGReader
 import websockets
-import test
 import collections
 import app
 import threading
 import webbrowser
 import minecraft_control
+import calibration
+import test
+import utils
 
 def start_appy(): 
     uvicorn.run(app.app, reload=False)
@@ -21,19 +23,29 @@ async def main():
    # appy_thread.start()
     #print(f"FastAPI started") 
 
-    webbrowser.open("http://localhost:8000/games")
-    await asyncio.sleep(2)
+    #webbrowser.open("http://localhost:8000/games")
+    #await asyncio.sleep(2)
 
-    # # Initialize EOG reader 
-    # det_queue = collections.deque(maxlen=50)
-    # eog = EOGReader(det_queue)
-    # eog.eventLoop = asyncio.get_event_loop() #M: Websocket Setup
-    # #await eog.connect_to_webapp() #M: connect & holding connection to app.py (from eog_reader.py)
-    # eog.start() #M: start eog_reader (thread)
+ # 1. INITIALIZE PYGAME & EOG READER
+    window, WIDTH, HEIGHT, font_size, font, clock = utils.init_pygame() #M: Maybe not needed. order is important!! (must be same as returned in utils.py)
+    det_queue = collections.deque(maxlen=50)
+    eog_thread = EOGReader(det_queue) #creating an instance of EOGReader class with det_queue as argument (used in the __init__ method (--> variable self.out_queue IS det_queue for this EOGReader instance (for eog_thread).)
+    #M added:
+    #await eog.connect_to_webapp() #M: verbindet & hält Verbindung zu app.py
+    eog_thread.start() #M: start eog_reader (thread) with default calibration_params (default thresholds, etc.)
 
-    test.main() #M: run main function from test
-    await test.main() # after finishing/skipping of test
+# 2. RUN CALIBRATION
+    calibration_params = calibration.run_calibration(eog_thread, window, font, clock)
+    blink_calibration_results = calibration.run_blink_calibration(eog_thread, window, font, clock, calibration_params, WIDTH, HEIGHT)
+# 3. SAVE AND UPDATE CALIBRATION DATA
+    saved_calibration_data = calibration.save_and_update_calib_data(eog_thread, calibration_params, blink_calibration_results)
+    if saved_calibration_data:  #M: if calib was not quit with key "q" or unsuccessful:  
+# 4. RUN/SKIP TEST
+        test.run_test(eog_thread, window, font, clock, saved_calibration_data) #M: run main function from test
 
+
+
+# 5. START MOUSE- & KEYBOARD-REPLACEMENT
    # if test.calib_and_test_completed:
     mouseKeyboard_thread = minecraft_control.MouseKeyboardReplacement()
     mouseKeyboard_thread.start() #M: calls run() - method in minecraft_control in MouseReplacement
