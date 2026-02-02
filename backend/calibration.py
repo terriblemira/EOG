@@ -120,13 +120,56 @@ def run_calibration(eog_thread, window, font, clock, WIDTH, HEIGHT): # variable 
     eog_thread.out_queue.clear()
 
     # Instructions for calibration
-    if not spacebar_pressed(eog_thread, window, font, "Press SPACEBAR to begin calibration... \n No double-blinking unless wanting to exit!"):
-        return {
-            "baselines": {"H": 0, "V": 0},
-            "thresholds": {"left": 0.1, "right": 0.1, "up": 0.1, "down": 0.1},
-            "channel_norm_factors": {"ch1": 1, "ch2": 1, "ch3": 1, "ch5": 1},
-            "alpha": 0.0
-        }
+    # if not spacebar_pressed(eog_thread, window, font, "Press SPACEBAR to begin calibration... \n No double-blinking unless wanting to exit!"):
+    #     return {
+    #         "baselines": {"H": 0, "V": 0},
+    #         "thresholds": {"left": 0.1, "right": 0.1, "up": 0.1, "down": 0.1},
+    #         "channel_norm_factors": {"ch1": 1, "ch2": 1, "ch3": 1, "ch5": 1},
+    #         "alpha": 0.0
+    #     }
+
+    
+
+    window.fill(BG_COLOR)
+    instruction_surf = font.render('BEGIN Calibration with double-blink. Alternatively wait 30 secs.', True, WHITE)
+    window.blit(instruction_surf, (window.get_width() // 2 - instruction_surf.get_width() // 2,
+                                      window.get_height() // 2))
+    
+    pygame.display.flip()
+
+     # Create a function to display the rest screen with options
+    def show_home_screen(quit_option=False):
+        window.fill(BG_COLOR)
+        home_surf = font.render("BEGIN calibration by double-blnking. Alternatively wait for 20 secs.", True, WHITE)
+        window.blit(home_surf, (WIDTH // 2 - home_surf.get_width() // 2, HEIGHT // 2 - 50))
+
+        if quit_option:
+            quit_surf = font.render("Q to quit", True, WHITE)
+            window.blit(quit_surf, (WIDTH // 2 - quit_surf.get_width() // 2, HEIGHT // 2 + 50))
+
+        pygame.display.flip()
+
+    # clear queue before searching for double blinks etc.
+    print(f'Utils: Clearing old signals from queue')
+    clear_count = 0
+    while not eog_thread.signal.empty():
+        try:
+            eog_thread.signal.get_nowait()
+            clear_count += 1
+        except:
+            break
+    print(f'Utils: Cleared {clear_count} old signals from queue')
+
+    home_start_time = time.time()
+    last_blink_time = None
+
+    while time.time - home_start_time < 20:
+        show_home_screen(quit_option=True)
+        is_double, last_blink_time = utils.check_double_blink(eog_thread, last_blink_time)
+        if is_double:
+            break
+        time.sleep(0.01)
+
 
     # Record data for each target
     i = 0

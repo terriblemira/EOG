@@ -60,6 +60,7 @@ def check_double_blink(eog_thread, last_blink_time):
             else:
                 if current_time - last_blink_time < 1.5:
                     last_blink_time = None
+                    print(f'Utils: Double-blink detected')
                     return True, last_blink_time
                 else: # if over 1.5 s
                     time_difference = current_time - last_blink_time
