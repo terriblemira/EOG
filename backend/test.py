@@ -22,7 +22,9 @@ os.makedirs(RESULTS_DIR, exist_ok=True)
 #START MAIN-Function
 #M: async def main():
 def run_test(eog_thread, calibration_params, window, font, clock, WIDTH, HEIGHT,  saved_calibration_data, actual_width, actual_height):
- 
+    last_blink_time = None
+    test_skipped = False
+
  # Create a function to display the rest screen with options
     def show_rest_screen(skip_option=False):
         window.fill(BG_COLOR)
@@ -50,15 +52,39 @@ def run_test(eog_thread, calibration_params, window, font, clock, WIDTH, HEIGHT,
 
         # Wait for 5 seconds or for user input
     rest_start_time = time.time()
-    redo_last_steps = False
-    last_blink_time = None
 
     while time.time() - rest_start_time < 5.0:
         is_double, last_blink_time = utils.check_double_blink(eog_thread, last_blink_time)
         if is_double:
-            pygame.quit()
-            print(f'Utils/Test: double blink detected. Skip test.')
-            break
+            eog_thread.record_raw = False
+            eog_thread.save_raw_data(os.path.join(RESULTS_DIR, "main_task_raw_signals.csv"))
+            save_results(trials, calibration_params) # M: saving of thresholds etc in save_results (csv-file)
+            
+            # Display completion message
+            window.fill(BG_COLOR)
+            completion_surf = font.render("Test skipped! DOUBLE BLINK to exit or wait 20 secs.", True, WHITE)
+            window.blit(completion_surf, (WIDTH // 2 - completion_surf.get_width() // 2, HEIGHT // 2))
+            pygame.display.flip()
+
+            # # Wait for SPACEBAR to exit
+            # spacebar_pressed(eog_thread, window, font, message)
+            # calib_and_test_completed = True
+            # pygame.quit()
+
+            # Wait for double blink or 20s to exit
+            rest_start_time = time.time()
+
+            while time.time() - rest_start_time < 20.0:
+                is_double, last_blink_time = utils.check_double_blink(eog_thread, last_blink_time)
+                if is_double:
+                    pygame.quit()
+                    calib_and_test_completed = True
+                    
+                    return eog_thread
+
+                pygame.event.pump()
+                time.sleep(0.01)
+        
 
         pygame.event.pump()
         time.sleep(0.01)
@@ -194,7 +220,7 @@ def run_test(eog_thread, calibration_params, window, font, clock, WIDTH, HEIGHT,
 
                 # Advance to next step
                 step_index += 1
-                if step_index >= len(sequence):
+                if step_index >= len(sequence):  #M: EXIT TEST and jump to finally if last sequence done
                     running = False
                     break
 
@@ -242,16 +268,31 @@ def run_test(eog_thread, calibration_params, window, font, clock, WIDTH, HEIGHT,
         eog_thread.record_raw = False
         eog_thread.save_raw_data(os.path.join(RESULTS_DIR, "main_task_raw_signals.csv"))
         save_results(trials, calibration_params) # M: saving of thresholds etc in save_results (csv-file)
+
         # Display completion message
         window.fill(BG_COLOR)
-        completion_surf = font.render("Task complete! Press SPACEBAR to exit.", True, WHITE)
+        completion_surf = font.render("Task complete! DOUBLE BLINK to exit or wait 20 secs.", True, WHITE)
         window.blit(completion_surf, (WIDTH // 2 - completion_surf.get_width() // 2, HEIGHT // 2))
         pygame.display.flip()
 
-        # Wait for SPACEBAR to exit
-        spacebar_pressed(eog_thread, window, font, "Task complete! Press SPACEBAR to exit.")
-        calib_and_test_completed = True
-        pygame.quit()
+        # # Wait for SPACEBAR to exit
+        # spacebar_pressed(eog_thread, window, font, message)
+        # calib_and_test_completed = True
+        # pygame.quit()
+
+        # Wait for double blink or 20s to exit
+        rest_start_time = time.time()
+
+        while time.time() - rest_start_time < 20.0:
+            is_double, last_blink_time = utils.check_double_blink(eog_thread, last_blink_time)
+            if is_double:
+                pygame.quit()
+                calib_and_test_completed = True
+                break
+
+            pygame.event.pump()
+            time.sleep(0.01)
+            
 
 # #starting EOG for AFTER testing
 #     print(f"Restarting EOG Reader for live detection...")

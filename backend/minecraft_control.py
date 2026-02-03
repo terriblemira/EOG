@@ -3,7 +3,6 @@
 #TODO: (maybe in another class bc mouse movements parallel to moving forward): keep W-key pressed when double-blink detected (2 blinks within 1 s), regardless of direction & jump signals (not as elif), so that during moving forward turning & jumps can happen simultaneously: just stop w other double blink
 #TODO: get threadings right!! (turning and moving forward at same time parallel, as well as eog_reader thread)
 import pyautogui
-import eog_reader
 import threading
 import time
 import config
@@ -24,16 +23,16 @@ class MouseKeyboardReplacement(threading.Thread):
         pyautogui.FAILSAFE = True     #M: stops when mouse moved to corner 
         print(f"Class MouseKeyboardReplacement started as thread")
                     # DEBUG
-        print(f"MINECRAFT_CONTROL: Queue type: {type(eog_reader.signal)}")
-        print(f"Queue ID: {id(eog_reader.signal)}")
-        print(f"Has clear: {hasattr(eog_reader.signal, 'clear')}")
-        print(f"EOGReader ID: {id(eog_reader)}")
+        print(f"MINECRAFT_CONTROL: Queue type: {type(self.eog_reader.signal)}")
+        print(f"Queue ID: {id(self.eog_reader.signal)}")
+        print(f"Has clear: {hasattr(self.eog_reader.signal, 'clear')}")
+        print(f"EOGReader ID: {id(self.eog_reader)}")
 
     def run(self):
         while self.running:
 
-            if not eog_reader.signal.empty():
-                self.direction = eog_reader.signal.get()
+            if not self.eog_reader.signal.empty():
+                self.direction = self.eog_reader.signal.get()
                 print(f"minecraft_control: direction {self.direction}")
 
                 if self.direction == "blink":
@@ -57,7 +56,7 @@ class MouseKeyboardReplacement(threading.Thread):
                 start_time = time.time()
                 while time.time() - start_time < config.TURNING_COOLDOWN:  #M: COOLDOWN: Ignore opposite direction signal for 0.5 seconds
                     #pyautogui.moveRel(-self.speed, 0) #M: moves 1 time by 10 pixels --> has to be IN while-loop, not like keyDown
-                    eog_reader.signal.clear()  #M: clear queue to avoid getting old signals during cooldown
+                    self.eog_reader.signal.clear()  #M: clear queue to avoid getting old signals during cooldown
                     time.sleep(0.01) #M: to avoid getting cleared millions of times (CPU 1000) ## could cause lagging-problems if working w moveRel
                 
                 #M: After 0.5 s(Turning_cooldown): keep moving UNTIL opposite direction signal received
@@ -80,7 +79,7 @@ class MouseKeyboardReplacement(threading.Thread):
                 start_time = time.time()
                 while time.time() - start_time < config.TURNING_COOLDOWN:  #M: COOLDOWN: Ignore direction signal for 0.5 seconds
                     #pyautogui.moveRel(self.speed, 0)
-                    eog_reader.signal.clear()  #M: clear queue to avoid getting old signals during cooldown
+                    self.eog_reader.signal.clear()  #M: clear queue to avoid getting old signals during cooldown
                     time.sleep(0.01)
 
             # #After 0.5 s: keep moving UNTIL opposite direction signal received
@@ -102,7 +101,7 @@ class MouseKeyboardReplacement(threading.Thread):
                 self.upPressed = True
                 start_time = time.time()
                 while time.time() - start_time < config.TURNING_COOLDOWN:  #M: COOLDOWN: Ignore opposite direction signal for 0.5 seconds
-                    eog_reader.signal.clear()  #M: clear queue to avoid getting old signals during cooldown
+                    self.eog_reader.signal.clear()  #M: clear queue to avoid getting old signals during cooldown
                     #pyautogui.moveRel(0, -self.speed)
                     time.sleep(0.01)
 
@@ -126,7 +125,7 @@ class MouseKeyboardReplacement(threading.Thread):
                 start_time = time.time()
                 while time.time() - start_time < config.TURNING_COOLDOWN:  #M: COOLDOWN: Ignore opposite direction signal for 0.5 seconds
                     #pyautogui.moveRel(0, self.speed)
-                    eog_reader.signal.clear()  #M: clear queue to avoid getting old signals during cooldown
+                    self.eog_reader.signal.clear()  #M: clear queue to avoid getting old signals during cooldown
                     time.sleep(0.01) # remove if working with moveRel
 
             # #After 0.5 s: keep moving UNTIL opposite direction signal received

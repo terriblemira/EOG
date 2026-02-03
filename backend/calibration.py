@@ -163,7 +163,7 @@ def run_calibration(eog_thread, window, font, clock, WIDTH, HEIGHT): # variable 
     home_start_time = time.time()
     last_blink_time = None
 
-    while time.time - home_start_time < 20:
+    while time.time() - home_start_time < 20:
         show_home_screen(quit_option=True)
         is_double, last_blink_time = utils.check_double_blink(eog_thread, last_blink_time)
         if is_double:
