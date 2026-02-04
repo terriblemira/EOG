@@ -86,6 +86,18 @@ class EOGReader(threading.Thread):
         self.debug_counter = 0
         self.last_plot_update = time.time()
 
+#M: add marker for pause between calib sequences (for csv file): Extra row with START_PAUSE/STOP_PAUSE
+    def add_pause_marker(self, marker_type):
+        self.raw_data.append({
+            'timestamp': time.time(),
+            'ch1': marker_type,  # use ch1 for the marker text 
+            'ch2': 0,
+            'ch3': 0,
+            'ch5': 0,
+            'is_pause': True
+        })
+
+
     def save_raw_data(self, filename):
         if len(self.raw_log) == 0:
             print(f"[EOGReader] No raw data to save for {filename}")

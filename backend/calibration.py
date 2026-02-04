@@ -7,7 +7,6 @@ import matplotlib.pyplot as plt
 from datetime import datetime# Create a shared, date-stamped results folder
 import os
 from config import * # * = import all
-from utils import spacebar_pressed
 import utils
 import time
 import json
@@ -184,6 +183,8 @@ def run_calibration(eog_thread, window, font, clock, WIDTH, HEIGHT): # variable 
             # Show rest message with redo option
             show_rest_screen(redo_option=True)
 
+            eog_thread.add_pause_marker = "PAUSE START" #M: marker_type in eog_reader gets saved to PAUSE_START for csv file
+
           # Clear old signals before starting rest period
             print("Clearing old signals before rest...")
             cleared = 0
@@ -222,6 +223,8 @@ def run_calibration(eog_thread, window, font, clock, WIDTH, HEIGHT): # variable 
 
                 pygame.event.pump()
                 clock.tick(60)  # Keep the game loop running
+
+            eog_thread.add_pause_marker("PAUSE_END") 
                 
             # If user double-blinks, redo the last 4 steps
             if redo_last_steps:

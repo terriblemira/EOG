@@ -9,7 +9,7 @@ import numpy as np
 from config import *
 from eog_reader import EOGReader
 from calibration import run_calibration, run_blink_calibration 
-from utils import spacebar_pressed, expected_from_name, plot_detection_window, save_results
+from utils import expected_from_name, plot_detection_window, save_results
 import utils
 # Create a shared, date-stamped results folder
 from datetime import datetime
@@ -65,29 +65,52 @@ def run_test(eog_thread, calibration_params, window, font, clock, WIDTH, HEIGHT,
             completion_surf = font.render("Test skipped! DOUBLE BLINK to exit or wait 20 secs.", True, WHITE)
             window.blit(completion_surf, (WIDTH // 2 - completion_surf.get_width() // 2, HEIGHT // 2))
             pygame.display.flip()
+            test_skipped = True
+            trials = []
+
+            break
+
+        pygame.event.pump()
+        time.sleep(0.01)
 
             # # Wait for SPACEBAR to exit
             # spacebar_pressed(eog_thread, window, font, message)
             # calib_and_test_completed = True
             # pygame.quit()
 
-            # Wait for double blink or 20s to exit
-            rest_start_time = time.time()
-
-            while time.time() - rest_start_time < 20.0:
-                is_double, last_blink_time = utils.check_double_blink(eog_thread, last_blink_time)
-                if is_double:
-                    pygame.quit()
-                    calib_and_test_completed = True
-                    
-                    return eog_thread
-
-                pygame.event.pump()
-                time.sleep(0.01)
+    if test_skipped:
+        #M: Clear signals again to check for final exit-double-blink
+        print("Clearing old signals before exit wait...")
+        cleared = 0
+        while not eog_thread.signal.empty():
+            try:
+                eog_thread.signal.get_nowait()
+                cleared += 1
+            except:
+                break
+        print(f"Test: Cleared {cleared} old signals")
         
+        # Wait for double blink or 20s to exit
+        last_blink_time = None #M: resetting after first double blink detection
+        rest_start_time = time.time()
+        test_skipped = False
 
-        pygame.event.pump()
-        time.sleep(0.01)
+        while time.time() - rest_start_time < 20.0:
+            is_double, last_blink_time = utils.check_double_blink(eog_thread, last_blink_time)
+            if is_double:
+                print(f'Double blink detected. Exiting!')
+                pygame.quit()
+                calib_and_test_completed = True
+                
+                return eog_thread
+
+            pygame.event.pump()
+            time.sleep(0.01)
+
+        pygame.quit()
+        print(f'Double blink detected. Exiting!')
+        calib_and_test_completed = True
+        return eog_thread
         
     # # Wait for user to start test (#M in utils: spacebar_pressed function with double blink to skip test (quit game))
     # # if spacebar not pressed within 100 s delay, exit main function, else: center_pos = ... (go on with test)
