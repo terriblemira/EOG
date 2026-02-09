@@ -183,7 +183,7 @@ def run_calibration(eog_thread, window, font, clock, WIDTH, HEIGHT): # variable 
             # Show rest message with redo option
             show_rest_screen(redo_option=True)
 
-            eog_thread.add_pause_marker = "PAUSE START" #M: marker_type in eog_reader gets saved to PAUSE_START for csv file
+            eog_thread.add_pause_marker("PAUSE START") #M: marker_type in eog_reader gets saved to PAUSE_START for csv file
 
           # Clear old signals before starting rest period
             print("Clearing old signals before rest...")
