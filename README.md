@@ -28,7 +28,7 @@ Web-app to host games and more to be controlled by EOG
 - WINK FAST (more than once): hitting
 
 ## Ideas for further developments
--   Fine tune blink threshold multiplier to minimize false detections ( up/down detected as blink or vice versa)
+-   Fine tune blink threshold multiplier to minimize false detections (up/down detected as blink or vice versa)
 -   label data in calibration to train machine learning algorithm (and move thread_eog.record_raw to run_(blink_)calibration)
 -   Design a simple machine learning algorithm to improve accuracy (likely SVM or Random Forest)
 -   Maybe integrate blink calibration into the breaks in run_calibration
@@ -43,3 +43,9 @@ python -m venv .venv
 source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 python -m uvicorn app:app
+
+
+## May Help (explanations)
+
+Queues (f.ex. out_queue, signal):
+.get() & .get_nowait : no big difference in code. get() waits forever if empty, get_nowait() raises exception --> blocks continuing of code. Since always in "while not eog...signal.empty:" loop. No real difference. no_wait just safer for debugging.

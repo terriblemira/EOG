@@ -183,7 +183,7 @@ def plot_detection_window(
             print("No data in buffers to plot.")
             return
 
-        ch1 = np.array(eog_reader.channel_buffers[0])
+        ch7 = np.array(eog_reader.channel_buffers[0])
         ch2 = np.array(eog_reader.channel_buffers[1])
         ch3 = np.array(eog_reader.channel_buffers[2])
         ch5 = np.array(eog_reader.channel_buffers[4])
@@ -196,13 +196,13 @@ def plot_detection_window(
         alpha = cal.get("alpha", 0.0)
 
         # Process & normalize
-        ch1 = process_signal(ch1, 250, "ch1") / norm["ch1"]
+        ch7 = process_signal(ch7, 250, "ch7") / norm["ch7"]
         ch2 = process_signal(ch2, 250, "ch2") / norm["ch2"]
         ch3 = process_signal(ch3, 250, "ch3") / norm["ch3"]
         ch5 = process_signal(ch5, 250, "ch5") / norm["ch5"]
 
         # Compute H/V and compensation
-        H = (ch1 - ch3) - baselines["H"]
+        H = (ch7 - ch3) - baselines["H"]
         V = (ch5 - ch2) - baselines["V"]
         V_comp = V - alpha * H
 

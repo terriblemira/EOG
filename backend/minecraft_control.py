@@ -56,8 +56,13 @@ class MouseKeyboardReplacement(threading.Thread):
                 start_time = time.time()
                 while time.time() - start_time < config.TURNING_COOLDOWN:  #M: COOLDOWN: Ignore opposite direction signal for 0.5 seconds
                     #pyautogui.moveRel(-self.speed, 0) #M: moves 1 time by 10 pixels --> has to be IN while-loop, not like keyDown
-                    self.eog_reader.signal.clear()  #M: clear queue to avoid getting old signals during cooldown
-                    time.sleep(0.01) #M: to avoid getting cleared millions of times (CPU 1000) ## could cause lagging-problems if working w moveRel
+                    while not self.eog_reader.signal.empty:
+                        try:
+                            self.eog_reader.signal.get_nowait()  #M: clear queue to avoid getting old signals during cooldown
+                        #pyautogui.moveRel(0, -self.speed)
+                        except:
+                            break
+                        time.sleep(0.01) #M: to avoid getting cleared millions of times (CPU 1000) ## could cause lagging-problems if working w moveRel
                 
                 #M: After 0.5 s(Turning_cooldown): keep moving UNTIL opposite direction signal received
  #               while True:
@@ -78,8 +83,12 @@ class MouseKeyboardReplacement(threading.Thread):
                 self.rightPressed = True
                 start_time = time.time()
                 while time.time() - start_time < config.TURNING_COOLDOWN:  #M: COOLDOWN: Ignore direction signal for 0.5 seconds
-                    #pyautogui.moveRel(self.speed, 0)
-                    self.eog_reader.signal.clear()  #M: clear queue to avoid getting old signals during cooldown
+                    while not self.eog_reader.signal.empty:
+                        try:
+                            self.eog_reader.signal.get_nowait()  #M: clear queue to avoid getting old signals during cooldown
+                        #pyautogui.moveRel(0, -self.speed)
+                        except:
+                            break
                     time.sleep(0.01)
 
             # #After 0.5 s: keep moving UNTIL opposite direction signal received
@@ -94,15 +103,21 @@ class MouseKeyboardReplacement(threading.Thread):
 
         elif self.direction == "up":
             if self.downPressed:
-                pyautogui.keyUp('down')
+                pyautogui.keyUp('shift')
+                print(f'Minec_control: Up: sneaking mode deactivated')
                 self.downPressed = False
             if not self.upPressed:
-                pyautogui.keyDown('up')
-                self.upPressed = True
+                pyautogui.press('space')
+                print(f'Minec_control: jumped!')
+                #self.upPressed = True
                 start_time = time.time()
                 while time.time() - start_time < config.TURNING_COOLDOWN:  #M: COOLDOWN: Ignore opposite direction signal for 0.5 seconds
-                    self.eog_reader.signal.clear()  #M: clear queue to avoid getting old signals during cooldown
-                    #pyautogui.moveRel(0, -self.speed)
+                    while not self.eog_reader.signal.empty:
+                        try:
+                            self.eog_reader.signal.get_nowait()  #M: clear queue to avoid getting old signals during cooldown
+                        #pyautogui.moveRel(0, -self.speed)
+                        except:
+                            break
                     time.sleep(0.01)
 
             # #After 0.5 s: keep moving UNTIL opposite direction signal received
@@ -116,17 +131,23 @@ class MouseKeyboardReplacement(threading.Thread):
             #     time.sleep(0.01)
 
         elif self.direction == "down":
-            if self.upPressed:
-                pyautogui.keyUp('up')
-                self.upPressed = False
+            # if self.upPressed:
+            #     pyautogui.keyUp('up')
+            #     self.upPressed = False
             if not self.downPressed:
-                pyautogui.keyDown('down')
+                pyautogui.keyDown('shift')
+                print(f'Minec_control: Down/Shift: sneaking mode activated')
                 self.downPressed = True
                 start_time = time.time()
                 while time.time() - start_time < config.TURNING_COOLDOWN:  #M: COOLDOWN: Ignore opposite direction signal for 0.5 seconds
                     #pyautogui.moveRel(0, self.speed)
-                    self.eog_reader.signal.clear()  #M: clear queue to avoid getting old signals during cooldown
-                    time.sleep(0.01) # remove if working with moveRel
+                    while not self.eog_reader.signal.empty:
+                        try:
+                            self.eog_reader.signal.get_nowait()  #M: clear queue to avoid getting old signals during cooldown
+                        #pyautogui.moveRel(0, -self.speed)
+                        except:
+                            break
+                    time.sleep(0.01)
 
             # #After 0.5 s: keep moving UNTIL opposite direction signal received
             # while True:
@@ -144,7 +165,7 @@ class MouseKeyboardReplacement(threading.Thread):
         current_time = time.time() # time-stamp as soon as blinked
 
         #M: in case last_blink_time already existing (check for valid double blink):
-        if self.last_blink_time and (current_time - self.last_blink_time < 1): # First one i.o. to say that if last_b_t is None (as in init), skip
+        if self.last_blink_time and (current_time - self.last_blink_time < 1.5): # First one i.o. to say that if last_b_t is None (as in init), skip
             if self.wPressed:
                 pyautogui.keyUp('w')
                 print(f'W released')

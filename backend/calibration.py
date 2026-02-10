@@ -43,6 +43,17 @@ def run_calibration(eog_thread, window, font, clock, WIDTH, HEIGHT): # variable 
     global is_calib_running
     is_calib_running = True
 
+    #M: Clear signals before starting
+    print("Clearing old signals before exit wait...")
+    cleared = 0
+    while not eog_thread.signal.empty():
+        try:
+            eog_thread.signal.get_nowait()
+            cleared += 1
+        except:
+            break
+    print(f"Test: Cleared {cleared} old signals")
+
     #M: record raw calibration data for saving later
     eog_thread.raw_log = []
     eog_thread.record_raw = True
@@ -65,7 +76,7 @@ def run_calibration(eog_thread, window, font, clock, WIDTH, HEIGHT): # variable 
         window.blit(rest_surf, (WIDTH // 2 - rest_surf.get_width() // 2, HEIGHT // 2 - 50))
 
         if redo_option:
-            redo_surf = font.render("Double blink to redo the last 4 steps", True, WHITE)
+            redo_surf = font.render("Double blink HARD to redo the last 4 steps", True, WHITE)
             window.blit(redo_surf, (WIDTH // 2 - redo_surf.get_width() // 2, HEIGHT // 2 + 50))
 
         pygame.display.flip()
@@ -108,11 +119,11 @@ def run_calibration(eog_thread, window, font, clock, WIDTH, HEIGHT): # variable 
     """Run calibration to determine baselines and thresholds"""
     # Data structure to store raw signals for each direction
     calibration_data = {
-        "left": {"ch1": [], "ch2": [], "ch3": [], "ch5": []},
-        "right": {"ch1": [], "ch2": [], "ch3": [], "ch5": []},
-        "up": {"ch1": [], "ch2": [], "ch3": [], "ch5": []},
-        "down": {"ch1": [], "ch2": [], "ch3": [], "ch5": []},
-        "center": {"ch1": [], "ch2": [], "ch3": [], "ch5": []}
+        "left": {"ch7": [], "ch2": [], "ch3": [], "ch5": []},
+        "right": {"ch7": [], "ch2": [], "ch3": [], "ch5": []},
+        "up": {"ch7": [], "ch2": [], "ch3": [], "ch5": []},
+        "down": {"ch7": [], "ch2": [], "ch3": [], "ch5": []},
+        "center": {"ch7": [], "ch2": [], "ch3": [], "ch5": []}
     }
 
     # Clear the detection queue
@@ -123,23 +134,23 @@ def run_calibration(eog_thread, window, font, clock, WIDTH, HEIGHT): # variable 
     #     return {
     #         "baselines": {"H": 0, "V": 0},
     #         "thresholds": {"left": 0.1, "right": 0.1, "up": 0.1, "down": 0.1},
-    #         "channel_norm_factors": {"ch1": 1, "ch2": 1, "ch3": 1, "ch5": 1},
+    #         "channel_norm_factors": {"ch7": 1, "ch2": 1, "ch3": 1, "ch5": 1},
     #         "alpha": 0.0
     #     }
 
     
 
     window.fill(BG_COLOR)
-    instruction_surf = font.render('BEGIN Calibration with double-blink. Alternatively wait 30 secs.', True, WHITE)
+    instruction_surf = font.render('BEGIN Calibration with double-blink. Alternatively wait 20 secs.', True, WHITE)
     window.blit(instruction_surf, (window.get_width() // 2 - instruction_surf.get_width() // 2,
                                       window.get_height() // 2))
     
     pygame.display.flip()
-
+    
      # Create a function to display the rest screen with options
     def show_home_screen(quit_option=False):
         window.fill(BG_COLOR)
-        home_surf = font.render("BEGIN calibration by double-blnking. Alternatively wait for 20 secs.", True, WHITE)
+        home_surf = font.render("BEGIN calibration with HARD double. Alternatively wait for 20 secs.", True, WHITE)
         window.blit(home_surf, (WIDTH // 2 - home_surf.get_width() // 2, HEIGHT // 2 - 50))
 
         if quit_option:
@@ -210,7 +221,7 @@ def run_calibration(eog_thread, window, font, clock, WIDTH, HEIGHT): # variable 
                             return {
                                 "baselines": {"H": 0, "V": 0},
                                 "thresholds": {"left": 0.1, "right": 0.1, "up": 0.1, "down": 0.1},
-                                "channel_norm_factors": {"ch1": 1, "ch2": 1, "ch3": 1, "ch5": 1},
+                                "channel_norm_factors": {"ch7": 1, "ch2": 1, "ch3": 1, "ch5": 1},
                                 "alpha": 0.0
                             }
                     # elif event.type == pygame.KEYDOWN:
@@ -243,7 +254,7 @@ def run_calibration(eog_thread, window, font, clock, WIDTH, HEIGHT): # variable 
                     if step_idx >= 0:
                         step_target = calibration_sequence[step_idx][0].lower()
                         # Remove data for this step from calibration_data
-                        for channel in ["ch1", "ch2", "ch3", "ch5"]:
+                        for channel in ["ch7", "ch2", "ch3", "ch5"]:
                             if calibration_data[step_target][channel]:
                                 calibration_data[step_target][channel] = calibration_data[step_target][channel][:-1]
 
@@ -268,7 +279,7 @@ def run_calibration(eog_thread, window, font, clock, WIDTH, HEIGHT): # variable 
         start_time = time.time() # duration of calibration step (how long keeps point "left"/...)
         end_time = start_time + 2
         # Temporary lists to collect samples for this step
-        step_samples_ch1 = []
+        step_samples_ch7 = []
         step_samples_ch2 = []
         step_samples_ch3 = []
         step_samples_ch5 = []
@@ -278,16 +289,16 @@ def run_calibration(eog_thread, window, font, clock, WIDTH, HEIGHT): # variable 
             samples, timestamps = eog_thread.inlet.pull_chunk(timeout=0.1, max_samples=FS)
             if samples:
                 samples = np.array(samples)
-                step_samples_ch1.extend(samples[:, 0])
+                step_samples_ch7.extend(samples[:, 0])
                 step_samples_ch2.extend(samples[:, 1])
                 step_samples_ch3.extend(samples[:, 2])
                 step_samples_ch5.extend(samples[:, 4])
             pygame.event.pump()
-        print(f"Recorded {len(step_samples_ch1)} samples for {target_name}")
+        print(f"Recorded {len(step_samples_ch7)} samples for {target_name}")
 
         # Store the full arrays for this step
-        if step_samples_ch1 and step_samples_ch2 and step_samples_ch3 and step_samples_ch5:
-            calibration_data[target_key]["ch1"].append(np.array(step_samples_ch1))
+        if step_samples_ch7 and step_samples_ch2 and step_samples_ch3 and step_samples_ch5:
+            calibration_data[target_key]["ch7"].append(np.array(step_samples_ch7))
             calibration_data[target_key]["ch2"].append(np.array(step_samples_ch2))
             calibration_data[target_key]["ch3"].append(np.array(step_samples_ch3))
             calibration_data[target_key]["ch5"].append(np.array(step_samples_ch5))
@@ -297,14 +308,14 @@ def run_calibration(eog_thread, window, font, clock, WIDTH, HEIGHT): # variable 
         i +=1
         
     channel_norm_factors = {
-        "ch1": calculate_channel_norm_factor(calibration_data, "ch1"),
+        "ch7": calculate_channel_norm_factor(calibration_data, "ch7"),
         "ch2": calculate_channel_norm_factor(calibration_data, "ch2"),
         "ch3": calculate_channel_norm_factor(calibration_data, "ch3"),
         "ch5": calculate_channel_norm_factor(calibration_data, "ch5")
     }
 
     print(f"\nChannel normalization factors: "
-          f"ch1={channel_norm_factors['ch1']:.2f}, ch2={channel_norm_factors['ch2']:.2f}, "
+          f"ch7={channel_norm_factors['ch7']:.2f}, ch2={channel_norm_factors['ch2']:.2f}, "
           f"ch3={channel_norm_factors['ch3']:.2f}, ch5={channel_norm_factors['ch5']:.2f}")
 
     # Calculate baselines from normalized signals
@@ -398,7 +409,7 @@ def calculate_normalized_baseline(calibration_data, channel_norm_factors, channe
     center_data = calibration_data["center"]
 
     # Check if we have all required channels
-    required_channels = ["ch1", "ch3"] if channel == "H" else ["ch5", "ch2"]
+    required_channels = ["ch7", "ch3"] if channel == "H" else ["ch5", "ch2"]
     if not all(center_data[ch] for ch in required_channels):
         print(f"Warning: Insufficient center data for {channel} baseline. Using 0.")
         return 0
@@ -414,7 +425,7 @@ def calculate_normalized_baseline(calibration_data, channel_norm_factors, channe
 
         # Compute H or V based on channel type
         if channel == "H":
-            signals = processed_channels["ch1"] - processed_channels["ch3"]
+            signals = processed_channels["ch7"] - processed_channels["ch3"]
         else:  # V
             signals = processed_channels["ch5"] - processed_channels["ch2"]
 
@@ -452,30 +463,30 @@ def process_direction_data(calibration_data, direction, channel_norm_factors, ba
     """
     try:
         # Process all channels for this direction
-        ch1 = process_channel_data(calibration_data, "ch1", channel_norm_factors, direction)
+        ch7 = process_channel_data(calibration_data, "ch7", channel_norm_factors, direction)
         ch3 = process_channel_data(calibration_data, "ch3", channel_norm_factors, direction)
         ch5 = process_channel_data(calibration_data, "ch5", channel_norm_factors, direction)
         ch2 = process_channel_data(calibration_data, "ch2", channel_norm_factors, direction)
 
         # Check if we have valid data for all channels
-        if any(data is None or len(data) == 0 for data in [ch1, ch3, ch5, ch2]):
+        if any(data is None or len(data) == 0 for data in [ch7, ch3, ch5, ch2]):
             print(f"No valid data for {direction}")
             return None, None, None
 
         # Check if arrays have the same length
-        min_len = min(len(arr) for arr in [ch1, ch3, ch5, ch2] if isinstance(arr, np.ndarray) and len(arr) > 0)
+        min_len = min(len(arr) for arr in [ch7, ch3, ch5, ch2] if isinstance(arr, np.ndarray) and len(arr) > 0)
         if min_len == 0:
             print(f"No valid data for {direction}")
             return None, None, None
 
         # Trim arrays to the same length
-        ch1 = ch1[:min_len]
+        ch7 = ch7[:min_len]
         ch3 = ch3[:min_len]
         ch5 = ch5[:min_len]
         ch2 = ch2[:min_len]
 
         # Calculate H and V components
-        H = ch1 - ch3
+        H = ch7 - ch3
         V = ch5 - ch2
 
         # Apply baseline correction
@@ -512,9 +523,9 @@ def calculate_alpha(calibration_data, channel_norm_factors):
     """
     try:
         # Process horizontal movement data with more robust data selection
-        left_H_data = process_channel_data(calibration_data, "ch1", channel_norm_factors, "left")
+        left_H_data = process_channel_data(calibration_data, "ch7", channel_norm_factors, "left")
         left_H_data_3 = process_channel_data(calibration_data, "ch3", channel_norm_factors, "left")
-        right_H_data = process_channel_data(calibration_data, "ch1", channel_norm_factors, "right")
+        right_H_data = process_channel_data(calibration_data, "ch7", channel_norm_factors, "right")
         right_H_data_3 = process_channel_data(calibration_data, "ch3", channel_norm_factors, "right")
 
         # Check if we have valid data
@@ -689,30 +700,30 @@ def plot_direction_signals(calibration_data, direction, channel_norm_factors, ba
         signal_label = "H" if is_horizontal else "V"
 
         # Get all valid steps for plotting individual steps
-        ch1_key = "ch1" if is_horizontal else "ch5"
+        ch7_key = "ch7" if is_horizontal else "ch5"
         ch2_key = "ch3" if is_horizontal else "ch2"
 
-        valid_ch1 = [step for step in calibration_data[direction][ch1_key] if is_valid_step(step)]
+        valid_ch7 = [step for step in calibration_data[direction][ch7_key] if is_valid_step(step)]
         valid_ch2 = [step for step in calibration_data[direction][ch2_key] if is_valid_step(step)]
-        valid_steps = min(len(valid_ch1), len(valid_ch2))
+        valid_steps = min(len(valid_ch7), len(valid_ch2))
 
         for step_index in range(valid_steps):  # Limit to 3 steps for clarity
             try:
-                ch1_data = np.array(valid_ch1[step_index])
+                ch7_data = np.array(valid_ch7[step_index])
                 ch2_data = np.array(valid_ch2[step_index])
 
-                ch1_data = process_signal(ch1_data, FS, ch1_key) / channel_norm_factors[ch1_key]
+                ch7_data = process_signal(ch7_data, FS, ch7_key) / channel_norm_factors[ch7_key]
                 ch2_data = process_signal(ch2_data, FS, ch2_key) / channel_norm_factors[ch2_key]
 
-                step_signal = (ch1_data - ch2_data) - (baselines["H"] if is_horizontal else baselines["V"])
+                step_signal = (ch7_data - ch2_data) - (baselines["H"] if is_horizontal else baselines["V"])
 
                 if not is_horizontal:
                     # For vertical signals, we need H for compensation
                     step_ch3 = np.array([s for s in calibration_data[direction]["ch3"] if is_valid_step(s)][step_index])
-                    step_ch4 = np.array([s for s in calibration_data[direction]["ch1"] if is_valid_step(s)][step_index])
+                    step_ch4 = np.array([s for s in calibration_data[direction]["ch7"] if is_valid_step(s)][step_index])
 
                     step_ch3 = process_signal(step_ch3, FS, "ch3") / channel_norm_factors["ch3"]
-                    step_ch4 = process_signal(step_ch4, FS, "ch1") / channel_norm_factors["ch1"]
+                    step_ch4 = process_signal(step_ch4, FS, "ch7") / channel_norm_factors["ch7"]
 
                     step_H = (step_ch4 - step_ch3) - baselines["H"]
                     step_signal = step_signal - alpha * step_H
@@ -881,7 +892,7 @@ def run_blink_calibration(eog_thread, window, font, clock, calibration_params, W
     BLINK_CALIBRATION_DURATION = total_prompts * BLINK_PROMPT_INTERVAL + 2  # Ensure enough time for all prompts
     start_time = time.time()
     end_time = start_time + BLINK_CALIBRATION_DURATION
-    all_ch1, all_ch2, all_ch3, all_ch5 = [], [], [], []
+    all_ch7, all_ch2, all_ch3, all_ch5 = [], [], [], []
     all_times = []
 
     # Create a background surface to avoid redrawing everything each frame
@@ -986,7 +997,7 @@ def run_blink_calibration(eog_thread, window, font, clock, calibration_params, W
         samples, timestamps = eog_thread.inlet.pull_chunk(timeout=0.01, max_samples=FS)
         if samples:
             samples = np.array(samples)
-            all_ch1.extend(samples[:, 0])
+            all_ch7.extend(samples[:, 0])
             all_ch2.extend(samples[:, 1])
             all_ch3.extend(samples[:, 2])
             all_ch5.extend(samples[:, 4])
@@ -996,12 +1007,12 @@ def run_blink_calibration(eog_thread, window, font, clock, calibration_params, W
         clock.tick(FS)
 
     # Ensure we collected data for all 10 prompts
-    if len(all_ch1) == 0 or len(all_ch2) == 0 or len(all_ch3) == 0 or len(all_ch5) == 0:
+    if len(all_ch7) == 0 or len(all_ch2) == 0 or len(all_ch3) == 0 or len(all_ch5) == 0:
         print("No data collected for blink calibration")
         return {"blink_threshold": BLINK_THRESHOLD}
 
     # Convert to numpy arrays
-    ch1 = np.array(all_ch1)
+    ch7 = np.array(all_ch7)
     ch2 = np.array(all_ch2)
     ch3 = np.array(all_ch3)
     ch5 = np.array(all_ch5)
@@ -1010,7 +1021,7 @@ def run_blink_calibration(eog_thread, window, font, clock, calibration_params, W
     # Process signals using process_eog_signals
     try:
         H, V, V_compensated = process_eog_signals(
-            ch1, ch2, ch3, ch5, calibration_params
+            ch7, ch2, ch3, ch5, calibration_params
         )
     except Exception as e:
         print(f"Error processing signals for blink calibration: {e}")

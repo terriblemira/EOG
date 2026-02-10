@@ -148,11 +148,11 @@ def process_signal(data, fs, channel_type):
 
     return data
 
-def process_eog_signals(ch1, ch2, ch3, ch5, calibration_params=None):
+def process_eog_signals(ch7, ch2, ch3, ch5, calibration_params=None):
     """
     Process EOG signals with wavelet denoising, alpha compensation, and final smoothing.
     Args:
-        ch1, ch2, ch3, ch5: EOG channels as np.arrays
+        ch7, ch2, ch3, ch5: EOG channels as np.arrays
         calibration_params: Dictionary with baselines, channel_norm_factors, alpha
     Returns:
         H_filt: Processed horizontal signal
@@ -164,12 +164,12 @@ def process_eog_signals(ch1, ch2, ch3, ch5, calibration_params=None):
         calibration_params = {
             "baselines": {"H": 0, "V": 0},
             "thresholds": {"left": 0.3, "right": 0.3, "up": 0.3, "down": 0.3},
-            "channel_norm_factors": {"ch1": 1, "ch2": 1, "ch3": 1, "ch5": 1},
+            "channel_norm_factors": {"ch7": 1, "ch2": 1, "ch3": 1, "ch5": 1},
             "alpha": 0.0
         }
 
     # Ensure arrays are same length
-    min_len = min(len(ch1), len(ch2), len(ch3), len(ch5))
+    min_len = min(len(ch7), len(ch2), len(ch3), len(ch5))
     if min_len == 0:
         return np.array([]), np.array([]), np.array([])
 
@@ -178,14 +178,14 @@ def process_eog_signals(ch1, ch2, ch3, ch5, calibration_params=None):
         # Return empty arrays if data is too short
         return np.array([]), np.array([]), np.array([])
 
-    ch1 = ch1[:min_len]
+    ch7 = ch7[:min_len]
     ch2 = ch2[:min_len]
     ch3 = ch3[:min_len]
     ch5 = ch5[:min_len]
 
     # Apply notch + bandpass with error handling
     try:
-        ch1 = process_signal(ch1, FS, "ch1")
+        ch7 = process_signal(ch7, FS, "ch7")
         ch2 = process_signal(ch2, FS, "ch2")
         ch3 = process_signal(ch3, FS, "ch3")
         ch5 = process_signal(ch5, FS, "ch5")
@@ -195,7 +195,7 @@ def process_eog_signals(ch1, ch2, ch3, ch5, calibration_params=None):
 
     # Normalize
     try:
-        ch1 /= calibration_params["channel_norm_factors"]["ch1"]
+        ch7 /= calibration_params["channel_norm_factors"]["ch7"]
         ch2 /= calibration_params["channel_norm_factors"]["ch2"]
         ch3 /= calibration_params["channel_norm_factors"]["ch3"]
         ch5 /= calibration_params["channel_norm_factors"]["ch5"]
@@ -205,7 +205,7 @@ def process_eog_signals(ch1, ch2, ch3, ch5, calibration_params=None):
 
     # H and V signals
     try:
-        H_raw = ch1 - ch3
+        H_raw = ch7 - ch3
         V_raw = ch5 - ch2
     except Exception as e:
         print(f"Error calculating H and V signals: {e}")
@@ -334,13 +334,13 @@ def detect_blinks(V_signal, fs, blink_threshold=BLINK_THRESHOLD):
         print(f"Error in blink detection: {e}")
         return []
 
-def process_eog_signals_with_blinks(ch1, ch2, ch3, ch5, calibration_params=None):
+def process_eog_signals_with_blinks(ch7, ch2, ch3, ch5, calibration_params=None):
     """
     Process EOG signals with blink detection.
     Returns H, V, V_compensated, and blink_events.
     """
     # First get the standard processed signals
-    H, V, V_compensated = process_eog_signals(ch1, ch2, ch3, ch5, calibration_params)
+    H, V, V_compensated = process_eog_signals(ch7, ch2, ch3, ch5, calibration_params)
 
     # Check if we got valid signals
     if len(H) == 0 or len(V) == 0 or len(V_compensated) == 0:

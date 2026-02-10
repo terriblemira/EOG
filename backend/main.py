@@ -15,7 +15,6 @@ import utils
 def start_appy(): 
     uvicorn.run(app.app, reload=False)
 
-
 #M: async def main() function as event loop ("Motor" that lets async functions work) (Mainthread that is started(run) first (see at end of code))
 def main():
     # Run calibration; before starting EOG reader to have calibration params ready

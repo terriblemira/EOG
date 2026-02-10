@@ -1,4 +1,4 @@
-#detects movements and blinks and adds valid ones to a queue "signal" for other modules to read from
+#detects movements and blinks and adds valid ones to a queue "signal" for other modules to read from; creates raw_log with pause_markers (raw data that is saved in csv in test.py)
 # !! "signal" queue gets long quickly if class MouseReplacement (in minecraft_control.py) not working
 import threading
 import collections
@@ -40,7 +40,7 @@ class EOGReader(threading.Thread):
         self.calibration_params = calibration_params or {
             "baselines": {"H": 0, "V": 0},
             "thresholds": {"left": 0.3, "right": 0.3, "up": 0.3, "down": 0.3},
-            "channel_norm_factors": {"ch1": 1, "ch2": 1, "ch3": 1, "ch5": 1},
+            "channel_norm_factors": {"ch7": 1, "ch2": 1, "ch3": 1, "ch5": 1},
             "alpha": 0.0,
             "blink_threshold": 0.0
         }
@@ -88,9 +88,9 @@ class EOGReader(threading.Thread):
 
 #M: add marker for pause between calib sequences (for csv file): Extra row with START_PAUSE/STOP_PAUSE
     def add_pause_marker(self, marker_type):
-        self.raw_data.append({
+        self.raw_log.append({
             'timestamp': time.time(),
-            'ch1': marker_type,  # use ch1 for the marker text 
+            'ch7': marker_type,  # use ch7 for the marker text 
             'ch2': 0,
             'ch3': 0,
             'ch5': 0,
@@ -239,7 +239,7 @@ class EOGReader(threading.Thread):
             self.in_blink_cooldown = True  # Set blink cooldown flag
             self.last_final_detection = det
             # Print the blink detection
-            print(f"[FINAL DETECTION - BLINK] at {current_time:.2f}s "
+            print(f"READER: [FINAL DETECTION - BLINK] at ca. {current_time:.2f}s "
                 f"(Duration: {det.blink_duration:.3f}s, V_val: {det.v_value:.3f})")
 
             # Start a timer to clear the blink cooldown after BLINK_COOLDOWN period
@@ -259,24 +259,24 @@ class EOGReader(threading.Thread):
         try:
             # Use the detection window buffers
             times = np.array(self.detect_time_buffer)
-            ch1 = np.array(self.detect_channel_buffers[0])
+            ch7 = np.array(self.detect_channel_buffers[0])
             ch2 = np.array(self.detect_channel_buffers[1])
             ch3 = np.array(self.detect_channel_buffers[2])
             ch5 = np.array(self.detect_channel_buffers[4])
 
             # Ensure all arrays have the same length
-            min_length = min(len(times), len(ch1), len(ch2), len(ch3), len(ch5))
+            min_length = min(len(times), len(ch7), len(ch2), len(ch3), len(ch5))
             if min_length == 0:
                 return
 
             times = times[-min_length:]
-            ch1 = ch1[-min_length:]
+            ch7 = ch7[-min_length:]
             ch2 = ch2[-min_length:]
             ch3 = ch3[-min_length:]
             ch5 = ch5[-min_length:]
 
             # process signals with alpha compensation
-            H_corrected, V, V_compensated, blink_events = process_eog_signals_with_blinks(ch1, ch2, ch3, ch5, self.calibration_params)
+            H_corrected, V, V_compensated, blink_events = process_eog_signals_with_blinks(ch7, ch2, ch3, ch5, self.calibration_params)
 
                      # Calculate velocity (derivative)
             dt = 1.0 / config.FS
@@ -339,7 +339,7 @@ class EOGReader(threading.Thread):
                 )
 
                 if self._push_blink(det):
-                    print(f"Pushed blink detection to queue at {times[blink['peak_index']]:.2f}s")
+                    print(f"READER: Pushed blink detection to queue at {times[blink['peak_index']]:.2f}s")
                     self.signal.put("blink")
                     print(f"Signal now in eog_reader: {self.signal.queue}")
                     self.last_blink_time = current_time
@@ -659,23 +659,23 @@ class EOGReader(threading.Thread):
 
                 try:
                     # Process all channels for plotting
-                    ch1 = np.array(self.channel_buffers[0])
+                    ch7 = np.array(self.channel_buffers[0])
                     ch2 = np.array(self.channel_buffers[1])
                     ch3 = np.array(self.channel_buffers[2])
                     ch5 = np.array(self.channel_buffers[4])
 
                     # Ensure all arrays have the same length
-                    min_length = min(len(self.time_buffer), len(ch1), len(ch2), len(ch3), len(ch5))
+                    min_length = min(len(self.time_buffer), len(ch7), len(ch2), len(ch3), len(ch5))
                     if min_length > 0:
                         times = np.array(self.time_buffer)[-min_length:]
-                        ch1 = ch1[-min_length:]
+                        ch7 = ch7[-min_length:]
                         ch2 = ch2[-min_length:]
                         ch3 = ch3[-min_length:]
                         ch5 = ch5[-min_length:]
 
                         # Process signals with alpha compensation
                         H_corrected, V_corrected, V_compensated, _ = process_eog_signals_with_blinks(
-                            ch1, ch2, ch3, ch5, self.calibration_params
+                            ch7, ch2, ch3, ch5, self.calibration_params
                         )
 
                         # Check if we got valid results

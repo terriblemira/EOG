@@ -58,6 +58,8 @@ def run_test(eog_thread, calibration_params, window, font, clock, WIDTH, HEIGHT,
         if is_double:
             eog_thread.record_raw = False
             eog_thread.save_raw_data(os.path.join(RESULTS_DIR, "main_task_raw_signals.csv"))
+
+            trials = []
             save_results(trials, calibration_params) # M: saving of thresholds etc in save_results (csv-file)
             
             # Display completion message
@@ -66,7 +68,6 @@ def run_test(eog_thread, calibration_params, window, font, clock, WIDTH, HEIGHT,
             window.blit(completion_surf, (WIDTH // 2 - completion_surf.get_width() // 2, HEIGHT // 2))
             pygame.display.flip()
             test_skipped = True
-            trials = []
 
             break
 
