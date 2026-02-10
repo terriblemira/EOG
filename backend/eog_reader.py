@@ -1,4 +1,4 @@
-#detects movements and blinks and adds valid ones to a queue "signal" for other modules to read from; creates raw_log with pause_markers (raw data that is saved in csv in test.py)
+#detects movements and blinks and adds valid ones to a queue "signal" for other modules to read from; creates raw_log with pause_markers (raw data that is saved in csv in test.py); contains default thresholds
 # !! "signal" queue gets long quickly if class MouseReplacement (in minecraft_control.py) not working
 import threading
 import collections
@@ -7,7 +7,7 @@ import time
 from pylsl import StreamInlet, resolve_byprop
 from signal_processing_wavelet import process_eog_signals, process_eog_signals_with_blinks
 import config
-from config import DETECT_PERIOD, H_VELOCITY_THRESHOLD, V_VELOCITY_THRESHOLD
+from config import DETECT_PERIOD, H_VELOCITY_THRESHOLD, V_VELOCITY_THRESHOLD, BLINK_THRESHOLD
 from dataclasses import dataclass
 import asyncio # M:import bc of bool valid...Movement for webapp signal
 import websockets # M:import bc of bool valid...Movement for webapp signal
@@ -42,7 +42,7 @@ class EOGReader(threading.Thread):
             "thresholds": {"left": 0.3, "right": 0.3, "up": 0.3, "down": 0.3},
             "channel_norm_factors": {"ch7": 1, "ch2": 1, "ch3": 1, "ch5": 1},
             "alpha": 0.0,
-            "blink_threshold": 0.0
+            "blink_threshold": BLINK_THRESHOLD
         }
         self.last_blink_time = -1e9
         self.running = True
@@ -96,6 +96,15 @@ class EOGReader(threading.Thread):
             'ch5': 0,
             'is_pause': True
         })
+
+    def clear_old_queue_signals(self, max_signal_age = 0.3):
+        oldest_signal = self.out_queue[0]
+        current_time = time.time()
+        duration_oldest_signal = current_time - oldest_signal.ts
+        if duration_oldest_signal > max_signal_age:
+            cleared_count = len(self.signal.queue)
+            
+
 
 
     def save_raw_data(self, filename):
