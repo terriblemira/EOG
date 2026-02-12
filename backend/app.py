@@ -43,7 +43,7 @@ async def websocket_endpoint(websocket: WebSocket):
             
             if not eog_reader.signal.empty():
                 #and test.is_calib_running == True:
-                direction = eog_reader.signal.get()
+                direction, timestamp = eog_reader.signal.get()
                 print(f"direction received: {direction}")
                 if direction == "left":
                     print(f"{direction}: Sending 'Left-direction received' message to JavaScript")

@@ -32,7 +32,7 @@ class MouseKeyboardReplacement(threading.Thread):
         while self.running:
 
             if not self.eog_reader.signal.empty():
-                self.direction = self.eog_reader.signal.get()
+                self.direction, self.timestamp = self.eog_reader.signal.get()
                 print(f"minecraft_control: direction {self.direction}")
 
                 if self.direction == "blink":

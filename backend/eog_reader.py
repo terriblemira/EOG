@@ -31,11 +31,12 @@ class EOGReader(threading.Thread):
 
     def __init__(self, out_queue, max_queue=50, calibration_params=None): #M: Joses init function
         super().__init__()
-        self.signal = Queue()
+        self.signal = Queue() #M: self to make it instance variable (for THIS specific ongoing eog_thread)
+        self.temp_signal_queue = Queue()
         self.raw_log = []  # To store raw data if recording is enabled
         self.record_raw = False  # Flag to control raw data recording
         self.start_time = None
-        self.out_queue = out_queue
+        self.out_queue = out_queue #M: stores signal with ts(timestamp)
         self.max_queue = max_queue
         self.calibration_params = calibration_params or {
             "baselines": {"H": 0, "V": 0},
@@ -98,14 +99,27 @@ class EOGReader(threading.Thread):
         })
 
     def clear_old_queue_signals(self, max_signal_age = 0.3):
-        oldest_signal = self.out_queue[0]
         current_time = time.time()
-        duration_oldest_signal = current_time - oldest_signal.ts
-        if duration_oldest_signal > max_signal_age:
-            cleared_count = len(self.signal.queue)
+        cleared = 0
+
+        while not self.signal.empty():
+            try:
+                direction, timestamp = self.signal.get()
+                if current_time - timestamp < max_signal_age:
+                    direction, timestamp = self.temp_signal_queue.put()
+                else:
+                    cleared += 1
+
+            except:
+                break
+        
+        while not self.temp_signal_queue.empty():
+            self.signal.put(self.temp_signal_queue.get_nowait())
+        
+        if cleared > 0:
+            print(f'Cleared {cleared} signals')
+    
             
-
-
 
     def save_raw_data(self, filename):
         if len(self.raw_log) == 0:
@@ -349,7 +363,7 @@ class EOGReader(threading.Thread):
 
                 if self._push_blink(det):
                     print(f"READER: Pushed blink detection to queue at {times[blink['peak_index']]:.2f}s")
-                    self.signal.put("blink")
+                    self.signal.put("blink", time.time() - self.start_time)
                     print(f"Signal now in eog_reader: {self.signal.queue}")
                     self.last_blink_time = current_time
                     detected_directions.add("blink")
@@ -457,7 +471,7 @@ class EOGReader(threading.Thread):
 
                 if pushed:
                     detected_directions.add("left")
-                    self.signal.put("left")
+                    self.signal.put("left", time.time() - self.start_time)
                     print(f"Signal now in eog_reader: {self.signal.queue}")
 
           # Process right crossings
@@ -509,7 +523,7 @@ class EOGReader(threading.Thread):
 
                 if pushed:
                     detected_directions.add("right")
-                    self.signal.put("right")
+                    self.signal.put("right", time.time() - self.start_time)
                     #print(f"Signal now in eog_reader: {self.signal.queue}")
 
             # --- Vertical movements with improved detection logic ---
@@ -569,7 +583,7 @@ class EOGReader(threading.Thread):
 
                 if pushed:
                     detected_directions.add("up")
-                    self.signal.put("up")
+                    self.signal.put("up", time.time() - self.start_time)
                     #print(f"Signal now in eog_reader: {self.signal.queue}")
 
             # Process down crossings
@@ -624,7 +638,7 @@ class EOGReader(threading.Thread):
 
                 if pushed:
                     detected_directions.add("down")
-                    self.signal.put("down")
+                    self.signal.put("down", time.time() - self.start_time)
                     #print(f"Signal now in eog_reader: {self.signal.queue}")
 
             if not self.in_blink_cooldown:
@@ -639,9 +653,15 @@ class EOGReader(threading.Thread):
     def run(self):
         """Main thread loop for reading and processing EOG data"""
         last_detection_check = time.time()
+        last_cleanup_check = time.time()
 
         while self.running:
-            sample, timestamp = self.inlet.pull_sample(timeout=0.05)
+
+            if time.time - last_cleanup_check >= 0.3:
+                self.clear_old_queue_signals(max_age=0.3)
+                last_cleanup_check = time.time()
+
+            sample, timestamp = self.inlet.pull_sample(timeout=0.05) #M: get 1st "column"" from inlet as "sample", 2nd as "timestamp" (probably stored as "ts" in inlet)
             if sample is None:
                 continue
 

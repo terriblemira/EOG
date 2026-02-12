@@ -50,7 +50,7 @@ def init_pygame():
 def check_double_blink(eog_thread, last_blink_time):
 
     while not eog_thread.signal.empty():
-        direction = eog_thread.signal.get()
+        direction, timestamp = eog_thread.signal.get()
         if direction == 'blink':
             current_time = time.time()
             if last_blink_time is None:
