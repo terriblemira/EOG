@@ -1,4 +1,4 @@
-#detects movements and blinks and adds valid ones to a queue "signal" for other modules to read from; creates raw_log with pause_markers (raw data that is saved in csv in test.py); contains default thresholds
+# CONTAINS: detects movements and blinks, adds valid ones (see cooldowns etc.) to queue "signal" for other modules to read from; cleares signal queue from signals older 0.3 s every 0.3 s; creates raw_log with pause_markers (raw data that is saved in csv in test.py); contains default thresholds
 # !! "signal" queue gets long quickly if class MouseReplacement (in minecraft_control.py) not working
 import threading
 import collections
@@ -45,7 +45,6 @@ class EOGReader(threading.Thread):
             "alpha": 0.0,
             "blink_threshold": BLINK_THRESHOLD
         }
-        self.last_blink_time = -1e9
         self.running = True
         self.in_blink_cooldown = False  # Flag to track blink cooldown period
 
@@ -363,7 +362,7 @@ class EOGReader(threading.Thread):
 
                 if self._push_blink(det):
                     print(f"READER: Pushed blink detection to queue at {times[blink['peak_index']]:.2f}s")
-                    self.signal.put("blink", time.time() - self.start_time)
+                    self.signal.put(("blink", time.time() - self.start_time)) #M: 2 brackets so gets saved as tuple. Else queue would still just be "left" and not recognizing 2 items/values (.put() adds just 1 item)
                     print(f"Signal now in eog_reader: {self.signal.queue}")
                     self.last_blink_time = current_time
                     detected_directions.add("blink")
@@ -471,7 +470,7 @@ class EOGReader(threading.Thread):
 
                 if pushed:
                     detected_directions.add("left")
-                    self.signal.put("left", time.time() - self.start_time)
+                    self.signal.put(("left", time.time() - self.start_time))
                     print(f"Signal now in eog_reader: {self.signal.queue}")
 
           # Process right crossings
@@ -523,7 +522,7 @@ class EOGReader(threading.Thread):
 
                 if pushed:
                     detected_directions.add("right")
-                    self.signal.put("right", time.time() - self.start_time)
+                    self.signal.put(("right", time.time() - self.start_time))
                     #print(f"Signal now in eog_reader: {self.signal.queue}")
 
             # --- Vertical movements with improved detection logic ---
@@ -583,7 +582,7 @@ class EOGReader(threading.Thread):
 
                 if pushed:
                     detected_directions.add("up")
-                    self.signal.put("up", time.time() - self.start_time)
+                    self.signal.put(("up", time.time() - self.start_time))
                     #print(f"Signal now in eog_reader: {self.signal.queue}")
 
             # Process down crossings
@@ -638,7 +637,7 @@ class EOGReader(threading.Thread):
 
                 if pushed:
                     detected_directions.add("down")
-                    self.signal.put("down", time.time() - self.start_time)
+                    self.signal.put(("down", time.time() - self.start_time))
                     #print(f"Signal now in eog_reader: {self.signal.queue}")
 
             if not self.in_blink_cooldown:
@@ -657,8 +656,8 @@ class EOGReader(threading.Thread):
 
         while self.running:
 
-            if time.time - last_cleanup_check >= 0.3:
-                self.clear_old_queue_signals(max_age=0.3)
+            if time.time() - last_cleanup_check >= 0.3:
+                self.clear_old_queue_signals(max_signal_age=0.3)
                 last_cleanup_check = time.time()
 
             sample, timestamp = self.inlet.pull_sample(timeout=0.05) #M: get 1st "column"" from inlet as "sample", 2nd as "timestamp" (probably stored as "ts" in inlet)

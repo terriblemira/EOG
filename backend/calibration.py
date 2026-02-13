@@ -1,4 +1,4 @@
-# Calibration sequences, calib functions (run,), plotting of calibration
+# CONTAINS: Calibration sequences; calib functions (run,); calculating tresholds, alpha, baselines and channel norm factors; plotting of calibration diagrams; saving & updating calibration_data (gets merged in test.py)
 import numpy as np
 from signal_processing_wavelet import process_signal, process_eog_signals
 import matplotlib
@@ -42,6 +42,9 @@ def save_and_update_calib_data(eog_thread, calibration_params, blink_calibration
 def run_calibration(eog_thread, window, font, clock, WIDTH, HEIGHT): # variable eog_thread in calibration.py = variable eog_thread in test.py (main "grabs" eog_reader from calibration and uses it as eog_thread)
     global is_calib_running
     is_calib_running = True
+    skip_next_rest = False
+    last_blink_time = None
+    cooldown_end_time = None
 
     #M: Clear signals before starting
     print("Clearing old signals before exit wait...")
@@ -171,15 +174,18 @@ def run_calibration(eog_thread, window, font, clock, WIDTH, HEIGHT): # variable 
     print(f'Utils: Cleared {clear_count} old signals from queue')
 
     home_start_time = time.time()
-    last_blink_time = None
 
     while time.time() - home_start_time < 20:
+        eog_thread.add_pause_marker("PAUSE START") #M: marker_type in eog_reader gets saved to PAUSE_START for csv file
         show_home_screen(quit_option=True)
-        is_double, last_blink_time = utils.check_double_blink(eog_thread, last_blink_time)
+        is_double, last_blink_time, cooldown_end_time = utils.check_double_blink(eog_thread, last_blink_time, cooldown_end_time)
         if is_double:
             break
         time.sleep(0.01)
+    
+    ### CALIBRATION STARTS ###
 
+    eog_thread.add_pause_marker("PAUSE END") #M: marker_type in eog_reader gets saved to PAUSE_STOP for csv file
 
     # Record data for each target
     i = 0
@@ -191,79 +197,106 @@ def run_calibration(eog_thread, window, font, clock, WIDTH, HEIGHT): # variable 
 
         # Add a rest step every 4 targets
         if i > 0 and i % 4 == 0:
-            # Show rest message with redo option
-            show_rest_screen(redo_option=True)
+            if not skip_next_rest:
+                # Show rest message with redo option
+                show_rest_screen(redo_option=True)
 
-            eog_thread.add_pause_marker("PAUSE START") #M: marker_type in eog_reader gets saved to PAUSE_START for csv file
+                eog_thread.add_pause_marker("PAUSE START") #M: marker_type in eog_reader gets saved to PAUSE_START for csv file
 
-          # Clear old signals before starting rest period
-            print("Clearing old signals before rest...")
-            cleared = 0
-            while not eog_thread.signal.empty():
-                try:
-                    eog_thread.signal.get_nowait()
-                    cleared += 1
-                except:
-                    break
-            print(f"Cleared {cleared} old signals")
+                # Clear old signals before starting rest period
+                print("Clearing old signals before rest...")
+                cleared = 0
+                while not eog_thread.signal.empty():
+                    try:
+                        eog_thread.signal.get_nowait()
+                        cleared += 1
+                    except:
+                        break
+                print(f"Cleared {cleared} old signals")
 
-            # Wait for 5 seconds or for user input
-            rest_start_time = time.time()
-            redo_last_steps = False
-            last_blink_time = None
+                # Wait for 5 seconds or for user input
+                rest_start_time = time.time()
+                redo_last_steps = False
+                last_blink_time = None
 
-            while time.time() - rest_start_time < 5.0 and not redo_last_steps:
-                # Process events during rest period
-                for event in pygame.event.get():
-                    # if event.type == pygame.QUIT:
-                    if event.type == pygame.KEYDOWN:
-                        if event.key == pygame.K_q:  # If 'Q' is pressed                        
-                            return {
-                                "baselines": {"H": 0, "V": 0},
-                                "thresholds": {"left": 0.1, "right": 0.1, "up": 0.1, "down": 0.1},
-                                "channel_norm_factors": {"ch7": 1, "ch2": 1, "ch3": 1, "ch5": 1},
-                                "alpha": 0.0
-                            }
-                    # elif event.type == pygame.KEYDOWN:
-                    #     if event.key == pygame.K_r:  # If 'R' is pressed
-                is_double, last_blink_time = utils.check_double_blink(eog_thread, last_blink_time)
-                if is_double:
-                            redo_last_steps = True
-                            print(f'Utils/Calib: double blink detected. Redoing 4 steps')
+                while time.time() - rest_start_time < 5.0 and not redo_last_steps:
+                    # Process events during rest period
+                    for event in pygame.event.get():
+                        # if event.type == pygame.QUIT:
+                        if event.type == pygame.KEYDOWN:
+                            if event.key == pygame.K_q:  # If 'Q' is pressed                        
+                                return {
+                                    "baselines": {"H": 0, "V": 0},
+                                    "thresholds": {"left": 0.1, "right": 0.1, "up": 0.1, "down": 0.1},
+                                    "channel_norm_factors": {"ch7": 1, "ch2": 1, "ch3": 1, "ch5": 1},
+                                    "alpha": 0.0
+                                }
+                        # elif event.type == pygame.KEYDOWN:
+                        #     if event.key == pygame.K_r:  # If 'R' is pressed
+                    is_double, last_blink_time, cooldown_end_time = utils.check_double_blink(eog_thread, last_blink_time, cooldown_end_time)
+                    if is_double:
+                                redo_last_steps = True
+                                print(f'Utils/Calib: double blink detected. Redoing 4 steps')
+                                break
+
+                    pygame.event.pump()
+                    clock.tick(60)  # Keep the game loop running
+
+                eog_thread.add_pause_marker("PAUSE END") 
+                    
+                # If user double-blinks, redo the last 4 steps
+                if redo_last_steps:
+                    # Remove data from the last 4 steps
+                    steps_to_remove = 4
+                    print(f'Redoing last {steps_to_remove} steps of calibration...')
+
+                    for c in range(3):  #M: Show redo message for 3 seconds; i already used for different loop here!! 
+                        window.fill(BG_COLOR)
+                        redo_surf = font.render("Redoing last sequence...", True, WHITE)
+                        window.blit(redo_surf, (WIDTH // 2 - redo_surf.get_width() // 2, HEIGHT // 2 - 50))
+                        pygame.display.flip()
+                        time.sleep(1)
+                    
+                    # clear queue after sleep to remove any blinks during the message
+                    cleared = 0
+                    while not eog_thread.signal.empty():
+                        try:
+                            eog_thread.signal.get_nowait()
+                            cleared += 1
+                        except:
                             break
+                    print(f"Cleared {cleared} signals after redo message")
+                    
 
-                pygame.event.pump()
-                clock.tick(60)  # Keep the game loop running
+                    for step_idx in range(i-steps_to_remove, i):
+                        if step_idx >= 0:
+                            step_target = calibration_sequence[step_idx][0].lower()
+                            # Remove data for this step from calibration_data
+                            for channel in ["ch7", "ch2", "ch3", "ch5"]:
+                                if calibration_data[step_target][channel]:
+                                    calibration_data[step_target][channel] = calibration_data[step_target][channel][:-1]
 
-            eog_thread.add_pause_marker("PAUSE_END") 
-                
-            # If user double-blinks, redo the last 4 steps
-            if redo_last_steps:
-                # Remove data from the last 4 steps
-                steps_to_remove = 4
-                print(f'Redoing last {steps_to_remove} steps of calibration...')
+                    # Reset index to the beginning of the last 4 steps
+                    i = last_break_index
 
-                for c in range(3):  #M: Show redo message for 3 seconds; i already used for different loop here!! 
-                    window.fill(BG_COLOR)
-                    redo_surf = font.render("Redoing last sequence...", True, WHITE)
-                    window.blit(redo_surf, (WIDTH // 2 - redo_surf.get_width() // 2, HEIGHT // 2 - 50))
-                    pygame.display.flip()
-                    time.sleep(1)
+                    # Only skip rest if we're landing ON a rest period
+                    if i > 0 and i % 4 == 0:
+                        skip_next_rest = True
+                        print(f"Will skip rest period at i={i}")
+                    else:
+                        skip_next_rest = False
+                        print(f"Not landing on rest period (i={i}), won't skip")
 
-                for step_idx in range(i-steps_to_remove, i):
-                    if step_idx >= 0:
-                        step_target = calibration_sequence[step_idx][0].lower()
-                        # Remove data for this step from calibration_data
-                        for channel in ["ch7", "ch2", "ch3", "ch5"]:
-                            if calibration_data[step_target][channel]:
-                                calibration_data[step_target][channel] = calibration_data[step_target][channel][:-1]
+                    redo_last_steps = False
+                    last_blink_time = None
+                    continue
 
-                # Reset index to the beginning of the last 4 steps
-                i = last_break_index
-                continue
+                # Update last break index
+                last_break_index = i
 
-            # Update last break index
-            last_break_index = i
+            else:
+                skip_next_rest = False
+                last_break_index = i
 
         # Show the target
         window.fill(BG_COLOR)

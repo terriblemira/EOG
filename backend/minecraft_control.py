@@ -1,4 +1,4 @@
-#creates continuous turning in direction of eye movement signal until looking in another direction + presses 'w' if double-blinking + stops 'w' if another blink
+#  CONTAINS: creates continuous turning in direction of current signal until looking in opposite direction; jumps if "up"; sneaking mode activated if "down", deactivated if "up"; presses 'w' if double-blinking + stops 'w' if another blink
 #TODO: check how often signal queue is updated (every 0.1s?) - if too slow, change in eog_reader.py
 #TODO: (maybe in another class bc mouse movements parallel to moving forward): keep W-key pressed when double-blink detected (2 blinks within 1 s), regardless of direction & jump signals (not as elif), so that during moving forward turning & jumps can happen simultaneously: just stop w other double blink
 #TODO: get threadings right!! (turning and moving forward at same time parallel, as well as eog_reader thread)

@@ -1,3 +1,4 @@
+# CONTAINS: value numbers/constants/declarations: recognized by capital letters all throughout modules
 import os
 from datetime import datetime
 # ==============================
@@ -45,7 +46,7 @@ BLINK_MIN_DURATION = 0.075          # Minimum blink duration (seconds)
 BLINK_MAX_DURATION = 2         # Maximum blink duration (seconds)
 BLINK_THRESHOLD = 70.0             # NOT IN USE!! Default blink detection threshold (can be updated after calibration)
 BLINK_COOLDOWN = 0.5             # Minimum time between detected blinks (seconds)
-
+DOUBLE_BLINK_COOLDOWN = 5
 # other constants
 H_VELOCITY_THRESHOLD = 0.05
 V_VELOCITY_THRESHOLD = 0.05

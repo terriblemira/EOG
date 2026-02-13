@@ -9,13 +9,13 @@ import numpy as np
 from config import *
 from eog_reader import EOGReader
 from calibration import run_calibration, run_blink_calibration 
-from utils import expected_from_name, plot_detection_window, save_results
+from utils import expected_from_name, plot_detection_window
 import utils
 # Create a shared, date-stamped results folder
 from datetime import datetime
 import os
 import json
-
+import csv
 RESULTS_DIR = os.path.join("results", datetime.now().strftime("%Y%m%d_%H%M%S"))
 os.makedirs(RESULTS_DIR, exist_ok=True)
 
@@ -23,6 +23,7 @@ os.makedirs(RESULTS_DIR, exist_ok=True)
 #M: async def main():
 def run_test(eog_thread, calibration_params, window, font, clock, WIDTH, HEIGHT,  saved_calibration_data, actual_width, actual_height):
     last_blink_time = None
+    cooldown_end_time = None
     test_skipped = False
 
  # Create a function to display the rest screen with options
@@ -54,7 +55,7 @@ def run_test(eog_thread, calibration_params, window, font, clock, WIDTH, HEIGHT,
     rest_start_time = time.time()
 
     while time.time() - rest_start_time < 5.0:
-        is_double, last_blink_time = utils.check_double_blink(eog_thread, last_blink_time)
+        is_double, last_blink_time, cooldown_end_time = utils.check_double_blink(eog_thread, last_blink_time, cooldown_end_time)
         if is_double:
             eog_thread.record_raw = False
             eog_thread.save_raw_data(os.path.join(RESULTS_DIR, "main_task_raw_signals.csv"))
@@ -97,7 +98,7 @@ def run_test(eog_thread, calibration_params, window, font, clock, WIDTH, HEIGHT,
         test_skipped = False
 
         while time.time() - rest_start_time < 20.0:
-            is_double, last_blink_time = utils.check_double_blink(eog_thread, last_blink_time)
+            is_double, last_blink_time, cooldown_end_time = utils.check_double_blink(eog_thread, last_blink_time, cooldown_end_time)
             if is_double:
                 print(f'Double blink detected. Exiting!')
                 pygame.quit()
@@ -308,7 +309,7 @@ def run_test(eog_thread, calibration_params, window, font, clock, WIDTH, HEIGHT,
         rest_start_time = time.time()
 
         while time.time() - rest_start_time < 20.0:
-            is_double, last_blink_time = utils.check_double_blink(eog_thread, last_blink_time)
+            is_double, last_blink_time, cooldown_end_time = utils.check_double_blink(eog_thread, last_blink_time, cooldown_end_time)
             if is_double:
                 pygame.quit()
                 calib_and_test_completed = True
@@ -317,6 +318,68 @@ def run_test(eog_thread, calibration_params, window, font, clock, WIDTH, HEIGHT,
             pygame.event.pump()
             time.sleep(0.01)
             
+def save_results(trials, calibration_params, out_path=None):
+    """Save trial results to CSV file"""
+    try:
+        # Default output path if not provided
+        if not out_path or out_path.strip() == "":
+            out_dir = os.path.join(os.getcwd(), "results")
+            os.makedirs(out_dir, exist_ok=True)
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            out_path = os.path.join(out_dir, f"eog_results_{timestamp}.csv")
+
+        else:
+            # Ensure directory exists
+            out_dir = os.path.dirname(out_path)
+            if out_dir:
+                os.makedirs(out_dir, exist_ok=True)
+
+        with open(out_path, "w", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=[
+                "step_index", "target_name", "expected_h", "expected_v",
+                "detected_h", "detected_v", "is_blink", "blink_duration",
+                "correct", "blink_threshold"
+            ])
+            writer.writeheader()
+
+            # Write each trial
+            for trial in trials:
+                clean_row = {
+                    "step_index": trial.get("step_index", ""),
+                    "target_name": trial.get("target_name", ""),
+                    "expected_h": trial.get("expected_h", ""),
+                    "expected_v": trial.get("expected_v", ""),
+                    "detected_h": trial.get("detected_h", ""),
+                    "detected_v": trial.get("detected_v", ""),
+                    "is_blink": trial.get("is_blink", False),
+                    "correct": trial.get("correct", ""),
+                }
+                writer.writerow(clean_row)
+
+            # Add summary rows
+            total = len(trials)
+            correct = sum(1 for r in trials if r.get("correct", False))
+            writer.writerow({})
+            writer.writerow({
+                "target_name": "SUMMARY",
+                "expected_h": f"{correct}/{total} ({(correct/total*100.0 if total else 0.0):.1f}%)",
+            })
+
+            # Add thresholds row
+            writer.writerow({
+                "target_name": "THRESHOLDS",
+                "expected_h": f"Left: {calibration_params['thresholds']['left']:.4f}, Right: {calibration_params['thresholds']['right']:.4f}",
+                "expected_v": f"Up: {calibration_params['thresholds']['up']:.4f}, Down: {calibration_params['thresholds']['down']:.4f}",
+                "blink_threshold": f"Blink: {calibration_params.get('blink_threshold', BLINK_THRESHOLD):.4f}"
+            })
+
+        print(f"Successfully saved results to {out_path}")
+        return True
+    except Exception as e:
+        print(f"Error saving results: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return False
 
 # #starting EOG for AFTER testing
 #     print(f"Restarting EOG Reader for live detection...")

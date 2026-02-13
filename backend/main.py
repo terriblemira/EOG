@@ -1,4 +1,6 @@
-#M: RUN IN Command Prompt under "+"
+# CONTAINS: main function, RUN JUST THIS for 1. calibation, 2. testing (possible skipping) and 3. Mouse&KeyBoardReplacement; RUN IN Command Prompt under "+"
+# BEFORE RUNNING: start Lsl stream; MINECRAFT SETTINGS: activate Keyboard only option, turn turning speed down to ca. 5
+
 import asyncio
 import uvicorn 
 from eog_reader import EOGReader
@@ -17,7 +19,6 @@ def start_appy():
 
 #M: async def main() function as event loop ("Motor" that lets async functions work) (Mainthread that is started(run) first (see at end of code))
 def main():
-    # Run calibration; before starting EOG reader to have calibration params ready
    # appy_thread = threading.Thread(target=start_appy, daemon=True) #M: app.py (opening + running of webpage) as separate thread (running paralllel to eog_reader); "daemon=True": background thread, so automatically stops when main program is stopped
    # appy_thread.start()
     #print(f"FastAPI started") 

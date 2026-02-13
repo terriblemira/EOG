@@ -1,3 +1,4 @@
+# CONTAINS: important functions that may be needed in multiple modules, f.ex. checking for double_blink (for calibr and test), plotting of detection_plots (for test), saving test results as csv (for test), (spacebar_pressed not used atm, was in between sequences the pause time)
 import pygame
 import os
 import csv
@@ -9,11 +10,12 @@ from datetime import datetime
 from config import DEBUG_PLOTS, BG_COLOR, WHITE, PLOT_BUFFER_DURATION, BLINK_THRESHOLD
 # Create a shared, date-stamped results folder
 from datetime import datetime
-from config import RESULTS_DIR
+from config import RESULTS_DIR, DOUBLE_BLINK_COOLDOWN
 import time
 import test
 import eog_reader
-csv_path = os.path.join(RESULTS_DIR, "eog_trial_results.csv")
+
+csv_path = os.path.join(RESULTS_DIR, "eog_trial_results.csv") #M: may not be needed?
 
 start_time = time.time() #M: store start time of program to calculate timepoints later
 startOfBreakTime = 0  #M: global variable to store timepoint of break starting
@@ -47,27 +49,33 @@ def init_pygame():
     return window, WIDTH, HEIGHT, font, clock, actual_width, actual_height
 
 
-def check_double_blink(eog_thread, last_blink_time):
+def check_double_blink(eog_thread, last_blink_time=None, cooldown_end_time=None): #M in brackets r default values (just for 1st call, until get changed)
+    blink_detected_time = time.time()
+
+    if cooldown_end_time is not None and blink_detected_time < cooldown_end_time: #M DOUBLE_BLINK_COOLDOWN(=0.5 s) until new one can get detected
+        while not eog_thread.signal.empty():
+            eog_thread.signal.get()
+        return False, last_blink_time, cooldown_end_time
 
     while not eog_thread.signal.empty():
         direction, timestamp = eog_thread.signal.get()
         if direction == 'blink':
-            current_time = time.time()
             if last_blink_time is None:
-                last_blink_time = current_time
-                return False, last_blink_time
+                last_blink_time = blink_detected_time
+                return False, last_blink_time, None
 
             else:
-                if current_time - last_blink_time < 1.5:
+                if blink_detected_time - last_blink_time < 1.5:
                     last_blink_time = None
                     print(f'Utils: Double-blink detected')
-                    return True, last_blink_time
+                    cooldown_end_time = blink_detected_time + DOUBLE_BLINK_COOLDOWN
+                    return True, last_blink_time, cooldown_end_time
                 else: # if over 1.5 s
-                    time_difference = current_time - last_blink_time
+                    time_difference = blink_detected_time - last_blink_time
                     print(f'Utils: time_diff {time_difference: .3f} too long')
-                    last_blink_time = current_time
-                    return False, last_blink_time
-    return False, last_blink_time
+                    last_blink_time = blink_detected_time
+                    return False, last_blink_time, None
+    return False, last_blink_time, cooldown_end_time
 
 def spacebar_pressed(eog_thread, window, font, message="Press SPACEBAR to continue"):
     """Display message and wait for SPACEBAR press"""
@@ -129,6 +137,7 @@ def spacebar_pressed(eog_thread, window, font, message="Press SPACEBAR to contin
         pygame.time.delay(10) #just alternative to time.sleep() (doesnt make much difference)
     return True # if spacebar pressed --> in test.py: "if not spacebar_pressed:" = "if not True" = "if False" --> skips if --> don't return out of main test function but stay
 
+# used in test.py
 def expected_from_name(name: str):
     """Return expected H and V directions for a given target name"""
     name = name.lower()
@@ -143,7 +152,8 @@ def expected_from_name(name: str):
     else:  # center
         return {"expected_h": None, "expected_v": None}
 
-def plot_detection_window(
+# used in test.py:
+def plot_detection_window( 
     eog_reader,
     step_index=None,
     target_name=None,
@@ -263,65 +273,3 @@ def plot_detection_window(
         import traceback
         traceback.print_exc()
 
-def save_results(trials, calibration_params, out_path=None):
-    """Save trial results to CSV file"""
-    try:
-        # Default output path if not provided
-        if not out_path or out_path.strip() == "":
-            out_dir = os.path.join(os.getcwd(), "results")
-            os.makedirs(out_dir, exist_ok=True)
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            out_path = os.path.join(out_dir, f"eog_results_{timestamp}.csv")
-
-        else:
-            # Ensure directory exists
-            out_dir = os.path.dirname(out_path)
-            if out_dir:
-                os.makedirs(out_dir, exist_ok=True)
-
-        with open(out_path, "w", newline="", encoding="utf-8") as f:
-            writer = csv.DictWriter(f, fieldnames=[
-                "step_index", "target_name", "expected_h", "expected_v",
-                "detected_h", "detected_v", "is_blink", "blink_duration",
-                "correct", "blink_threshold"
-            ])
-            writer.writeheader()
-
-            # Write each trial
-            for trial in trials:
-                clean_row = {
-                    "step_index": trial.get("step_index", ""),
-                    "target_name": trial.get("target_name", ""),
-                    "expected_h": trial.get("expected_h", ""),
-                    "expected_v": trial.get("expected_v", ""),
-                    "detected_h": trial.get("detected_h", ""),
-                    "detected_v": trial.get("detected_v", ""),
-                    "is_blink": trial.get("is_blink", False),
-                    "correct": trial.get("correct", ""),
-                }
-                writer.writerow(clean_row)
-
-            # Add summary rows
-            total = len(trials)
-            correct = sum(1 for r in trials if r.get("correct", False))
-            writer.writerow({})
-            writer.writerow({
-                "target_name": "SUMMARY",
-                "expected_h": f"{correct}/{total} ({(correct/total*100.0 if total else 0.0):.1f}%)",
-            })
-
-            # Add thresholds row
-            writer.writerow({
-                "target_name": "THRESHOLDS",
-                "expected_h": f"Left: {calibration_params['thresholds']['left']:.4f}, Right: {calibration_params['thresholds']['right']:.4f}",
-                "expected_v": f"Up: {calibration_params['thresholds']['up']:.4f}, Down: {calibration_params['thresholds']['down']:.4f}",
-                "blink_threshold": f"Blink: {calibration_params.get('blink_threshold', BLINK_THRESHOLD):.4f}"
-            })
-
-        print(f"Successfully saved results to {out_path}")
-        return True
-    except Exception as e:
-        print(f"Error saving results: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        return False
