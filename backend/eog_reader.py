@@ -43,7 +43,7 @@ class EOGReader(threading.Thread):
             "thresholds": {"left": 0.3, "right": 0.3, "up": 0.3, "down": 0.3},
             "channel_norm_factors": {"ch7": 1, "ch2": 1, "ch3": 1, "ch5": 1},
             "alpha": 0.0,
-            "blink_threshold": BLINK_THRESHOLD
+            "blink_threshold": BLINK_THRESHOLD #M: 1st of 2 default blink thresholds (HIGH one for double blink detection during redo)
         }
         self.running = True
         self.in_blink_cooldown = False  # Flag to track blink cooldown period

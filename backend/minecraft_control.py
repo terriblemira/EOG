@@ -172,6 +172,16 @@ class MouseKeyboardReplacement(threading.Thread):
                 self.wPressed = False
             
             else:
+                if self.downPressed:
+                    pyautogui.keyUp("down")
+                    self.downPressed = False
+                if self.leftPressed:
+                    pyautogui.keyUp("left")
+                    self.leftPressed = False
+                if self.rightPressed:
+                    pyautogui.keyUp("right")
+                    self.rightPressed = False
+                         
                 pyautogui.keyDown('w')
                 print(f'W pressed')
                 self.wPressed = True

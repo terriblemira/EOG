@@ -898,8 +898,10 @@ def run_blink_calibration(eog_thread, window, font, clock, calibration_params, W
     eog_thread.record_raw = True
 
     print("Starting blink calibration...")
+    # 2nd default threshold calculated with direction calibration parameters; JUST for BLINK CALIBRATION:
+    new_default_blink_threshold = max(calibration_params["thresholds"]["down"],calibration_params["thresholds"]["up"]) * BLINK_THRESHOLD_MULTIPLIER  # Start with 1.5x(current BLINK_TR._M.) the up/down threshold
 
-    BLINK_THRESHOLD = max(calibration_params["thresholds"]["down"],calibration_params["thresholds"]["up"]) * BLINK_THRESHOLD_MULTIPLIER  # Start with 1.5x(current BLINK_TR._M.) the up/down threshold
+    eog_thread.blink_threshold = new_default_blink_threshold
 
     for c in range(5):  #M: Show redo message for 3 seconds; i already used for different loop here!! 
         window.fill(BG_COLOR)
@@ -957,7 +959,7 @@ def run_blink_calibration(eog_thread, window, font, clock, calibration_params, W
         # Check for quit events
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
-                return {"blink_threshold": BLINK_THRESHOLD}
+                return {"blink_threshold": new_default_blink_threshold}
 
         # Show blink prompt at regular intervals
         if current_time - last_prompt_time >= BLINK_PROMPT_INTERVAL and prompt_count < total_prompts:
@@ -987,7 +989,7 @@ def run_blink_calibration(eog_thread, window, font, clock, calibration_params, W
             while time.time() < green_start + 0.5:
                 for event in pygame.event.get():
                     if event.type == pygame.QUIT:
-                        return {"blink_threshold": BLINK_THRESHOLD}
+                        return {"blink_threshold": new_default_blink_threshold}
                 clock.tick(FS)
 
             # Return to gray circle (using background)
@@ -1042,7 +1044,7 @@ def run_blink_calibration(eog_thread, window, font, clock, calibration_params, W
     # Ensure we collected data for all 10 prompts
     if len(all_ch7) == 0 or len(all_ch2) == 0 or len(all_ch3) == 0 or len(all_ch5) == 0:
         print("No data collected for blink calibration")
-        return {"blink_threshold": BLINK_THRESHOLD}
+        return {"blink_threshold": new_default_blink_threshold}
 
     # Convert to numpy arrays
     ch7 = np.array(all_ch7)
@@ -1060,13 +1062,13 @@ def run_blink_calibration(eog_thread, window, font, clock, calibration_params, W
         print(f"Error processing signals for blink calibration: {e}")
         import traceback
         traceback.print_exc()
-        return {"blink_threshold": BLINK_THRESHOLD}
+        return {"blink_threshold": new_default_blink_threshold}
 
     # Plot and detect blinks using the shared function
     if DEBUG_PLOTS:
         try:
             # Use the shared blink detection function
-            blink_samples = detect_blinks_in_signal(V_compensated, FS, calibration_params["thresholds"]["up"], BLINK_MIN_DURATION, BLINK_MAX_DURATION)
+            blink_samples = detect_blinks_in_signal(V_compensated, FS, new_default_blink_threshold, BLINK_MIN_DURATION, BLINK_MAX_DURATION)
             # Plot the blink calibration data
             min_len = min(len(times), len(V_compensated))
             times = times[:min_len]
@@ -1080,7 +1082,7 @@ def run_blink_calibration(eog_thread, window, font, clock, calibration_params, W
 
     # Calculate blink threshold using the same detection logic    # Calculate blink threshold using the same detection logic
     try:
-        blink_samples = detect_blinks_in_signal(V_compensated, FS, calibration_params["thresholds"]["up"], BLINK_MIN_DURATION, BLINK_MAX_DURATION)
+        blink_samples = detect_blinks_in_signal(V_compensated, FS, new_default_blink_threshold, BLINK_MIN_DURATION, BLINK_MAX_DURATION)
         if len(blink_samples) >= BLINK_MIN_SAMPLES:
             # Extract peak values for threshold calculation
             peak_values = [sample['peak_value'] for sample in blink_samples]
@@ -1092,6 +1094,10 @@ def run_blink_calibration(eog_thread, window, font, clock, calibration_params, W
 
             # Ensure minimum threshold relative to 'up' threshold
             blink_threshold = max(blink_threshold, 2 * calibration_params["thresholds"]["up"])
+
+            #M: update eog_thread's threshold to the calculated one (3rd threshold):
+            eog_thread.blink_threshold = blink_threshold
+
             print(f"Blink calibration successful:")
             print(f"- Detected {len(blink_samples)} valid blinks")
             print(f"- Mean peak amplitude: {mean_peak:.3f}")
@@ -1112,18 +1118,19 @@ def run_blink_calibration(eog_thread, window, font, clock, calibration_params, W
             eog_thread.record_raw = False
             eog_thread.save_raw_data(os.path.join(RESULTS_DIR, "blink_calibration_raw_signals.csv"))
 
-            return {"blink_threshold": BLINK_THRESHOLD}
+            return {"blink_threshold": new_default_blink_threshold}
 
     except Exception as e:
         print(f"Error calculating blink threshold: {e}")
         import traceback
         traceback.print_exc()
+        eog_thread.blink_threshold = new_default_blink_threshold
 
         #M: stop recording signal for raw data saving
         eog_thread.record_raw = False
         eog_thread.save_raw_data(os.path.join(RESULTS_DIR, "blink_calibration_raw_signals.csv"))
 
-        return {"blink_threshold": BLINK_THRESHOLD}
+        return {"blink_threshold": new_default_blink_threshold}
     
 
 def plot_blink_calibration(V_compensated, times, blink_samples, title="Blink Calibration"):

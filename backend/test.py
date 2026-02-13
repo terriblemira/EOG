@@ -370,7 +370,7 @@ def save_results(trials, calibration_params, out_path=None):
                 "target_name": "THRESHOLDS",
                 "expected_h": f"Left: {calibration_params['thresholds']['left']:.4f}, Right: {calibration_params['thresholds']['right']:.4f}",
                 "expected_v": f"Up: {calibration_params['thresholds']['up']:.4f}, Down: {calibration_params['thresholds']['down']:.4f}",
-                "blink_threshold": f"Blink: {calibration_params.get('blink_threshold', BLINK_THRESHOLD):.4f}"
+                "blink_threshold": f"Blink: {calibration_params['blink_threshold']:.4f}"
             })
 
         print(f"Successfully saved results to {out_path}")
