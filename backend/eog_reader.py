@@ -341,10 +341,12 @@ class EOGReader(threading.Thread):
             for blink in valid_blink_events:
                 # Check cooldown
                 if (current_time - self.last_blink_time) < config.BLINK_COOLDOWN:
+                    print(f"DEBUG: EOG_READER: PROCESS_DETECTION_WIN: blink event within BLINK_COOLDOWN --> ignored")
                     continue
-
+                print(f"DEBUG: EOG_READER: PROCESS_DETECTION_WIN: self.calibration_params['blink_threshold'] = {self.calibration_params['blink_threshold']}")
                 # Check if the blink peak is above the blink threshold
                 if abs(V_compensated[blink['peak_index']]) < self.calibration_params['blink_threshold']:
+                    print(f"DEBUG: EOG_READER: PROCESS_DETECTION_WIN: vertical signal during blink peak smaller than eog_thread.calibr_p[blink_threshold]")
                     continue  # Ignore small peaks
 
                 # Create a blink detection
@@ -360,7 +362,7 @@ class EOGReader(threading.Thread):
                     v_velocity=V_velocity[blink['peak_index']]
                 )
 
-                if self._push_blink(det):
+                if self._push_blink(det): #M: calls method (which has boolean as outcome) and executes this "if" if outcome of method in "True"
                     print(f"READER: Pushed blink detection to queue at {times[blink['peak_index']]:.2f}s")
                     self.signal.put(("blink", time.time() - self.start_time)) #M: 2 brackets so gets saved as tuple. Else queue would still just be "left" and not recognizing 2 items/values (.put() adds just 1 item)
                     print(f"Signal now in eog_reader: {self.signal.queue}")
@@ -702,6 +704,7 @@ class EOGReader(threading.Thread):
                         ch5 = ch5[-min_length:]
 
                         # Process signals with alpha compensation
+                        print(f"DEBUG: EOG_READER: RUN(): self.calibration_params = {self.calibration_params}, that's given onto process_eog_signals_w_blinks")
                         H_corrected, V_corrected, V_compensated, _ = process_eog_signals_with_blinks(
                             ch7, ch2, ch3, ch5, self.calibration_params
                         )

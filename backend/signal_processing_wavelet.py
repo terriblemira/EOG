@@ -273,20 +273,22 @@ def process_eog_signals(ch7, ch2, ch3, ch5, calibration_params=None):
         print(f"Error in final smoothing: {e}")
         return H_denoised, V_denoised, V_compensated  # Return without final smoothing
 
-def detect_blinks(V_signal, fs, blink_threshold=BLINK_THRESHOLD):
+def detect_blinks(V_compensated, fs, blink_threshold=BLINK_THRESHOLD):
     """
     Detect blinks in the vertical EOG signal.
     Returns a list of blink events with start, end, and peak information.
     """
     # Check if signal is long enough
-    if len(V_signal) < MIN_SIGNAL_LENGTH:
-        print(f"Warning: Signal too short for blink detection ({len(V_signal)} < {MIN_SIGNAL_LENGTH} samples)")
+    print(f"DEBUG: SIG_PROC_WAVE: DETECT_BLINKS(): blink_threshold= {blink_threshold} (should be new_default_blink_threshold)")
+
+    if len(V_compensated) < MIN_SIGNAL_LENGTH:
+        print(f"Warning: Signal too short for blink detection ({len(V_compensated)} < {MIN_SIGNAL_LENGTH} samples)")
         return []
 
     try:
         # Find peaks in the absolute value of the signal
         peaks, properties = find_peaks(
-            np.abs(V_signal),
+            np.abs(V_compensated),
             height=blink_threshold,
             distance=int(0.1 * fs),
             width=(int(0.03 * fs), int(0.3 * fs))
@@ -295,7 +297,7 @@ def detect_blinks(V_signal, fs, blink_threshold=BLINK_THRESHOLD):
         blink_events = []
         for peak_idx in peaks:
             try:
-                peak_value = V_signal[peak_idx]
+                peak_value = V_compensated[peak_idx]
 
                 # Only consider positive peaks (blinks typically show as positive peaks in V)
                 if peak_value > blink_threshold:
@@ -304,12 +306,12 @@ def detect_blinks(V_signal, fs, blink_threshold=BLINK_THRESHOLD):
 
                     # Search backward for the start
                     start_idx = peak_idx
-                    while start_idx > 0 and np.abs(V_signal[start_idx]) > half_peak:
+                    while start_idx > 0 and np.abs(V_compensated[start_idx]) > half_peak:
                         start_idx -= 1
 
                     # Search forward for the end
                     end_idx = peak_idx
-                    while end_idx < len(V_signal) - 1 and np.abs(V_signal[end_idx]) > half_peak:
+                    while end_idx < len(V_compensated) - 1 and np.abs(V_compensated[end_idx]) > half_peak:
                         end_idx += 1
 
                     # Calculate duration in seconds
@@ -344,6 +346,7 @@ def process_eog_signals_with_blinks(ch7, ch2, ch3, ch5, calibration_params=None)
 
     # Check if we got valid signals
     if len(H) == 0 or len(V) == 0 or len(V_compensated) == 0:
+        print(f"DEBUG: SIG_PROC_WAVE: len(H), len(V) or len(V_compensated == 0), no valid signals")
         return np.array([]), np.array([]), np.array([]), []
     
      # Ensure all arrays have the same length
@@ -354,10 +357,13 @@ def process_eog_signals_with_blinks(ch7, ch2, ch3, ch5, calibration_params=None)
 
 # update for run_blink_calibration etc. if was updated in eog_reader/ calibration arleady (make sure using the righ default/calculated threshold)
     blink_threshold = calibration_params.get('blink_threshold', BLINK_THRESHOLD) if calibration_params else BLINK_THRESHOLD
+    print(f"DEBUG: SIG_PROC_WAVE: PROC_EOG_SIG_W_BLINKS: blink_threshold = {blink_threshold}")
     # Detect blinks in the V signal
-    blink_events = detect_blinks(V, FS, blink_threshold)
+    blink_events = detect_blinks(V_compensated, FS, blink_threshold)
+    print(f"DEBUG: SIG_PROC_WAVE: PROC_EOG_SIG_W_BLINKS: blink_events: {len(blink_events)}")
 
-
+    #M: filter out blinks with index (starting at 0) bigger than min_len, so not more blinks than min_len of other arrays
     valid_blink_events = [b for b in blink_events if b['peak_index'] < min_len]
+    print(f"DEBUG: SIG_PROC_WAVE: PROC_EOG_SIG_W_BLINKS: blink_events: {len(valid_blink_events)}")
 
     return H, V, V_compensated, valid_blink_events

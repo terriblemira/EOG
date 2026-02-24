@@ -27,7 +27,7 @@ LOWCUT = 0.5  # frequencies for the bandpass filter (filters out everything belo
 HIGHCUT = 15
 FILTER_ORDER = 2 # how "strictly" it cuts the excluded frequencies out (bandpass filter not perfect, always lets some "forbidden frequencies" slide through) (the higher the stricter)!!if too high: phases get messed up (like cutting parts out of sin/cos)
 MERGE_WINDOW = int(0.12 * FS)  # samples
-GLOBAL_COOLDOWN = 1  # seconds between ANY two accepted detections
+GLOBAL_COOLDOWN = 0.5  # seconds between ANY two accepted detections
 LSL_STREAM_NAME = 'Explore_8441_ExG'
 DETECT_PERIOD = 0.1
 
