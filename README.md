@@ -12,13 +12,16 @@ Questions to "#M" parts in code: miradrini@gmail.com
 Web-app to host games and more to be controlled by EOG
 
 ## Minecraft Connection Ideas:
-1. General:
+1. BEFORE RUNNING (Current status):
+- start Lsl stream
+- MINECRAFT SETTINGS: activate Keyboard only option, turn turning speed down to ca. 5
+2. General:
 - 1st person
-- important moves: lefty/righty/jumpy/sneeky/hit(y)/klick(y)/dropn/open inventoryy/runn
+- important moves: left(y)/righty/jumpy/sneeky/hit(y)/klick(y)/dropn/open inventoryy/runn --- y = yes, n = not yet idea
 - moving eyes back to center can't be detected --> COOLDOWN!!
 - possible problem: difference between UP and WINK: Tresholds may be similar/same & using pattern detection (2 opposite peaks in UP may result in at least 0.5 s delay)
 - during calibration: player needs to move nearer to screen in order for small "lookarounds" not being detected as movements (only "extremer" ones)
-2. Key Ideas:
+3. Key Ideas:
 - UP: Jump
 - DOWN: Sneek
 - LEFT/RIGHT: turns left/right until you look back to center (detected as opposite direction)

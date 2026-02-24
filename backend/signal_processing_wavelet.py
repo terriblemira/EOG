@@ -352,10 +352,12 @@ def process_eog_signals_with_blinks(ch7, ch2, ch3, ch5, calibration_params=None)
     V = V[:min_len]
     V_compensated = V_compensated[:min_len]
 
+# update for run_blink_calibration etc. if was updated in eog_reader/ calibration arleady (make sure using the righ default/calculated threshold)
+    blink_threshold = calibration_params.get('blink_threshold', BLINK_THRESHOLD) if calibration_params else BLINK_THRESHOLD
     # Detect blinks in the V signal
-    blink_events = detect_blinks(V, FS, BLINK_THRESHOLD)
+    blink_events = detect_blinks(V, FS, blink_threshold)
 
-    # Filter blink events to only those within our valid range
+
     valid_blink_events = [b for b in blink_events if b['peak_index'] < min_len]
 
-    return H, V, V_compensated, blink_events
+    return H, V, V_compensated, valid_blink_events

@@ -44,7 +44,7 @@ def main():
 # 4. RUN/SKIP TEST
     test.run_test(eog_thread, calibration_params, window, font, clock, WIDTH, HEIGHT, saved_calibration_data, actual_width, actual_height) #M: run main function from test
 
-
+      
 
 # 5. START MOUSE- & KEYBOARD-REPLACEMENT
    # if test.calib_and_test_completed:

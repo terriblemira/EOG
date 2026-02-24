@@ -1,0 +1,4 @@
+step_index,target_name,expected_h,expected_v,detected_h,detected_v,is_blink,blink_duration,correct,blink_threshold
+,,,,,,,,,
+,SUMMARY,0/0 (0.0%),,,,,,,
+,THRESHOLDS,"Left: 0.1000, Right: 0.1000","Up: 0.1000, Down: 0.1000",,,,,,Blink: 70.0000

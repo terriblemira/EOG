@@ -1,0 +1,20 @@
+{
+    "baselines": {
+        "H": 0,
+        "V": 0
+    },
+    "thresholds": {
+        "left": 0.1,
+        "right": 0.1,
+        "up": 0.1,
+        "down": 0.1
+    },
+    "channel_norm_factors": {
+        "ch7": 1,
+        "ch2": 1,
+        "ch3": 1,
+        "ch5": 1
+    },
+    "alpha": 0.0,
+    "blink_threshold": 70.0
+}

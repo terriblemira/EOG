@@ -29,7 +29,7 @@ def run_test(eog_thread, calibration_params, window, font, clock, WIDTH, HEIGHT,
  # Create a function to display the rest screen with options
     def show_rest_screen(skip_option=False):
         window.fill(BG_COLOR)
-        rest_surf = font.render("Calibration complete! Test starts in 5 seconds", True, WHITE)
+        rest_surf = font.render("Calibration complete! Test starts in 10 seconds", True, WHITE)
         window.blit(rest_surf, (WIDTH // 2 - rest_surf.get_width() // 2, HEIGHT // 2 - 50))
 
         if skip_option:
@@ -54,7 +54,7 @@ def run_test(eog_thread, calibration_params, window, font, clock, WIDTH, HEIGHT,
         # Wait for 5 seconds or for user input
     rest_start_time = time.time()
 
-    while time.time() - rest_start_time < 5.0:
+    while time.time() - rest_start_time < 10.0:
         is_double, last_blink_time, cooldown_end_time = utils.check_double_blink(eog_thread, last_blink_time, cooldown_end_time)
         if is_double:
             eog_thread.record_raw = False

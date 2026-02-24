@@ -20,6 +20,8 @@ class MouseKeyboardReplacement(threading.Thread):
         self.upPressed = False
         self.downPressed = False
         self.direction = None
+        self.left_start_time = 0
+        self.right_start_time = 0
         pyautogui.FAILSAFE = True     #M: stops when mouse moved to corner 
         print(f"Class MouseKeyboardReplacement started as thread")
                     # DEBUG
@@ -30,6 +32,17 @@ class MouseKeyboardReplacement(threading.Thread):
 
     def run(self):
         while self.running:
+
+            current_time = time.time()
+            if  self.leftPressed and current_time - self.left_start_time >= 4:
+                pyautogui.keyUp('left')
+                self.left_start_time = 0
+                self.leftPressed = False
+    
+            elif self.rightPressed and current_time - self.right_start_time >= 4:
+                pyautogui.keyUp('right')
+                self.right_start_time = 0
+                self.rightPressed = False     
 
             if not self.eog_reader.signal.empty():
                 self.direction, self.timestamp = self.eog_reader.signal.get()
@@ -44,8 +57,8 @@ class MouseKeyboardReplacement(threading.Thread):
 
 
         #M: method run as thread
-    def move_continuously(self):
-                
+    def move_continuously(self):       
+
         if self.direction == "left":
             if self.rightPressed:
                 pyautogui.keyUp('right')
@@ -53,8 +66,8 @@ class MouseKeyboardReplacement(threading.Thread):
             if not self.leftPressed:
                 pyautogui.keyDown('left') # string for left-arrow-key
                 self.leftPressed = True
-                start_time = time.time()
-                while time.time() - start_time < config.TURNING_COOLDOWN:  #M: COOLDOWN: Ignore opposite direction signal for 0.5 seconds
+                self.left_start_time = time.time()
+                while time.time() - self.left_start_time < config.TURNING_COOLDOWN:  #M: COOLDOWN: Ignore opposite direction signal for 0.5 seconds
                     #pyautogui.moveRel(-self.speed, 0) #M: moves 1 time by 10 pixels --> has to be IN while-loop, not like keyDown
                     while not self.eog_reader.signal.empty:
                         try:
@@ -81,8 +94,8 @@ class MouseKeyboardReplacement(threading.Thread):
             if not self.rightPressed:
                 pyautogui.keyDown('right')
                 self.rightPressed = True
-                start_time = time.time()
-                while time.time() - start_time < config.TURNING_COOLDOWN:  #M: COOLDOWN: Ignore direction signal for 0.5 seconds
+                self.right_start_time = time.time()
+                while time.time() - self.right_start_time < config.TURNING_COOLDOWN:  #M: COOLDOWN: Ignore direction signal for 0.5 seconds
                     while not self.eog_reader.signal.empty:
                         try:
                             self.eog_reader.signal.get_nowait()  #M: clear queue to avoid getting old signals during cooldown

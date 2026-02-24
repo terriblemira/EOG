@@ -297,8 +297,8 @@ class EOGReader(threading.Thread):
             ch3 = ch3[-min_length:]
             ch5 = ch5[-min_length:]
 
-            # process signals with alpha compensation
-            H_corrected, V, V_compensated, blink_events = process_eog_signals_with_blinks(ch7, ch2, ch3, ch5, self.calibration_params)
+            # process signals with alpha compensation (unpack values from process_eog_...)
+            H_corrected, V, V_compensated, valid_blink_events = process_eog_signals_with_blinks(ch7, ch2, ch3, ch5, self.calibration_params)
 
                      # Calculate velocity (derivative)
             dt = 1.0 / config.FS
@@ -310,23 +310,23 @@ class EOGReader(threading.Thread):
             if len(V_velocity) < len(V_compensated):
                 V_velocity = np.pad(V_velocity, (0, len(V_compensated) - len(V_velocity)), mode='edge')
 
-          #Ensure the processed signals (arrays) have the same length as times
-            min_processed_length = min(len(times), len(H_corrected), len(V), len(V_compensated), len(H_velocity), len(V_velocity))
-            if min_processed_length < min_length:
+          #Ensure the processed signals (arrays) have the same length as times array
+            min_processed_length = min(len(times), len(H_corrected), len(V), len(V_compensated), len(H_velocity), len(V_velocity)) #M: takes shortest length out of all the processed-signal-arrays and time-array
+            if min_processed_length < min_length: # if somewhere array shortened by processing: 
                 print(f"Warning: Processed signals shorter than expected ({min_processed_length} < {min_length})")
-                # Trim all arrays to the shortest length
-                times = times[-min_processed_length:]
+                # Trim all arrays to the shortest length (trim from the start, as )
+                times = times[:min_processed_length]
                 H_corrected = H_corrected[:min_processed_length]
                 V = V[:min_processed_length]
                 V_compensated = V_compensated[:min_processed_length]
                 H_velocity = H_velocity[:min_processed_length]
-                V_velocity = V_velocity[:min_processed_length]
+                V_velocity = V_velocity[:min_processed_length] # cut all to new shortest length ("-...:" ensures its cutting all from the , also bc most(all here) processing filters trim from start)
 
 
                 # Filter blink events to only those within our valid range (if too recent blinks, removes them and only use considers them in next detection window)
-                blink_events = [b for b in blink_events if b['peak_index'] < min_processed_length]
+                valid_blink_events = [b for b in valid_blink_events if b['peak_index'] < min_processed_length] 
             else:
-                blink_events = blink_events
+                valid_blink_events = valid_blink_events
 
             # Update latest signals for detection
             self.latest_H = H_corrected
@@ -338,13 +338,13 @@ class EOGReader(threading.Thread):
             detected_directions = set()  # Prevent multiple detections of the same direction per window
 
            # --- First detect blinks (they have priority) ---
-            for blink in blink_events:
+            for blink in valid_blink_events:
                 # Check cooldown
                 if (current_time - self.last_blink_time) < config.BLINK_COOLDOWN:
                     continue
 
                 # Check if the blink peak is above the blink threshold
-                if abs(V[blink['peak_index']]) < self.calibration_params['blink_threshold']:
+                if abs(V_compensated[blink['peak_index']]) < self.calibration_params['blink_threshold']:
                     continue  # Ignore small peaks
 
                 # Create a blink detection
