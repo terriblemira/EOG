@@ -44,7 +44,7 @@ BLINK_MAX_SAMPLES = 50            # Maximum number of blink samples to collect
 BLINK_THRESHOLD_MULTIPLIER = 1.5  # Multiplier for standard deviation to set threshold
 BLINK_MIN_DURATION = 0.02          # Minimum blink duration (seconds)
 BLINK_MAX_DURATION = 1         # Maximum blink duration (seconds)
-BLINK_THRESHOLD = 200            #M: 1st Default blink detection threshold, HIGH!!; initialized in init from eog_reader, just for redoing option (is replaced by new_default_blink threshold bf blink calibration)
+BLINK_THRESHOLD = 300            #M: 1st Default blink detection threshold, HIGH!!; initialized in init from eog_reader, just for redoing option (is replaced by new_default_blink threshold bf blink calibration)
 BLINK_COOLDOWN = 0.5             # Minimum time between detected blinks (seconds)
 DOUBLE_BLINK_COOLDOWN = 5 # Cooldown between 2 double-blinks (avoids redoing 2 times in calibration in 1 redo period)
 # other constants

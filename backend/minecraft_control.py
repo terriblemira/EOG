@@ -34,12 +34,12 @@ class MouseKeyboardReplacement(threading.Thread):
         while self.running:
 
             current_time = time.time()
-            if  self.leftPressed and current_time - self.left_start_time >= 4:
+            if  self.leftPressed and current_time - self.left_start_time >= 2:
                 pyautogui.keyUp('left')
                 self.left_start_time = 0
                 self.leftPressed = False
     
-            elif self.rightPressed and current_time - self.right_start_time >= 4:
+            elif self.rightPressed and current_time - self.right_start_time >= 2:
                 pyautogui.keyUp('right')
                 self.right_start_time = 0
                 self.rightPressed = False     
