@@ -19,6 +19,10 @@ from scipy.signal import find_peaks
 RESULTS_DIR = os.path.join("results", datetime.now().strftime("%Y%m%d_%H%M%S"))
 os.makedirs(RESULTS_DIR, exist_ok=True)
 
+def update_calib_data_for_blink_calib(eog_thread, calibration_params):
+    # Update parameters in eog_reader from default to final parameters 
+    eog_thread.calibration_params = calibration_params
+
  # merge, update from default in eog_reader and save calibration data
 def save_and_update_calib_data(eog_thread, calibration_params, blink_calibration_results):  
     calibration_params['blink_threshold'] = blink_calibration_results['blink_threshold']
@@ -27,7 +31,7 @@ def save_and_update_calib_data(eog_thread, calibration_params, blink_calibration
         json.dump(calibration_params, f, indent=4)
     print(f"Saved calibration parameters to {calibration_params_file}")
 
-    print(f"\nCalibration complete:")
+    print(f"\nCalibration & Blink Calibration complete:")
     print(f"Baselines: {calibration_params['baselines']}")
     print(f"Thresholds: {calibration_params['thresholds']}")
     print(f"Blink Threshold(Calib_params): {calibration_params['blink_threshold']}")
@@ -358,7 +362,7 @@ def run_calibration(eog_thread, window, font, clock, WIDTH, HEIGHT): # variable 
     V_baseline = calculate_normalized_baseline(calibration_data, channel_norm_factors, "V")
     baselines = {"H": H_baseline, "V": V_baseline}
 
-    # Calculate direction-specific thresholds and alpha
+    # Calculate direction-specific thresholds and alpha WITH NORMALIZED CHANNELS
     thresholds, alpha = calculate_direction_thresholds(calibration_data, channel_norm_factors, baselines)
 
     # Format thresholds for return
@@ -824,69 +828,69 @@ def plot_calibration_signals(calibration_data, channel_norm_factors, baselines, 
     except Exception as e:
         print(f"Could not display/save signal plots: {e}")
 
-def detect_blinks_in_signal(V_compensated, FS, new_default_blink_threshold, BLINK_MIN_DURATION, BLINK_MAX_DURATION):
-    """
-    Shared blink detection function used by both calibration functions.
-    Returns a list of blink events with consistent detection parameters.
-    """
-    from scipy.signal import find_peaks
-    import numpy as np
+# def detect_blinks_in_signal(V_denoised, FS, new_default_blink_threshold, BLINK_MIN_DURATION, BLINK_MAX_DURATION):
+#     """
+#     Shared blink detection function used by both calibration functions.
+#     Returns a list of blink events with consistent detection parameters.
+#     """
+#     from scipy.signal import find_peaks
+#     import numpy as np
 
-    blink_samples = []
+#     blink_samples = []
 
-    try:
-        # Find peaks in the absolute value of the signal
-        peaks, properties = find_peaks(
-            np.abs(V_compensated),
-            height= new_default_blink_threshold,  # Above up threshold to avoid noise
-            distance=int(0.2 * FS),  # Minimum 100ms between peaks
-            width=(int(BLINK_MIN_DURATION * FS), int(BLINK_MAX_DURATION * FS))
-        )
+#     try:
+#         # Find peaks in the absolute value of the signal
+#         peaks, properties = find_peaks(
+#             V_denoised,
+#             height= new_default_blink_threshold,  # Above up threshold to avoid noise
+#             distance=int(0.1 * FS),  # Minimum less than 100ms between peaks
+#             width=(int(BLINK_MIN_DURATION * FS), int(BLINK_MAX_DURATION * FS))
+#         )
 
-        for peak_idx in peaks:
-            try:
-                peak_value = V_compensated[peak_idx]
+#         for peak_idx in peaks:
+#             try:
+#                 peak_value = V_denoised[peak_idx]
 
-                # Find the start and end of the blink (where signal crosses half-peak)
-                half_peak = np.abs(peak_value) / 2
+#                 # Find the start and end of the blink (where signal crosses half-peak)
+#                 half_peak = peak_value / 2
 
-                # Search backward for the start
-                start_idx = peak_idx
-                while start_idx > 0 and np.abs(V_compensated[start_idx]) > half_peak:
-                    start_idx -= 1
+#                 # Search backward for the start
+#                 start_idx = peak_idx
+#                 while start_idx > 0 and np.abs(V_denoised[start_idx]) > half_peak:
+#                     start_idx -= 1
 
-                # Search forward for the end
-                end_idx = peak_idx
-                while end_idx < len(V_compensated) - 1 and np.abs(V_compensated[end_idx]) > half_peak:
-                    end_idx += 1
+#                 # Search forward for the end
+#                 end_idx = peak_idx
+#                 while end_idx < len(V_denoised) - 1 and np.abs(V_denoised[end_idx]) > half_peak:
+#                     end_idx += 1
 
-                # Calculate duration in seconds
-                duration = (end_idx - start_idx) / FS
+#                 # Calculate duration in seconds
+#                 duration = (end_idx - start_idx) / FS
 
-                # Only accept blinks with reasonable duration
-                if BLINK_MIN_DURATION <= duration <= BLINK_MAX_DURATION:
-                    blink_samples.append({
-                        'peak_value': np.abs(peak_value),
-                        'duration': duration,
-                        'start_time': start_idx / FS,
-                        'peak_time': peak_idx / FS,
-                        'end_time': end_idx / FS,
-                        'start_idx': start_idx,
-                        'peak_idx': peak_idx,
-                        'end_idx': end_idx
-                    })
+#                 # Only accept blinks with reasonable duration
+#                 if BLINK_MIN_DURATION <= duration <= BLINK_MAX_DURATION:
+#                     blink_samples.append({
+#                         'peak_value': np.abs(peak_value),
+#                         'duration': duration,
+#                         'start_time': start_idx / FS,
+#                         'peak_time': peak_idx / FS,
+#                         'end_time': end_idx / FS,
+#                         'start_idx': start_idx,
+#                         'peak_idx': peak_idx,
+#                         'end_idx': end_idx
+#                     })
 
-            except Exception as e:
-                print(f"Error processing peak {peak_idx}: {e}")
-                continue
+#             except Exception as e:
+#                 print(f"Error processing peak {peak_idx}: {e}")
+#                 continue
 
-    except Exception as e:
-        print(f"Error in blink detection: {e}")
-        import traceback
-        traceback.print_exc()
+#     except Exception as e:
+#         print(f"Error in blink detection: {e}")
+#         import traceback
+#         traceback.print_exc()
 
-    print(f"DEBUG: Calib: detect_blinks_in_signal: Returning {len(blink_samples)} valid blinks (blink_samples)")  # Debug print
-    return blink_samples
+#     print(f"DEBUG: Calib: detect_blinks_in_signal: Returning {len(blink_samples)} valid blinks (blink_samples)")  # Debug print
+#     return blink_samples
 
 def run_blink_calibration(eog_thread, window, font, clock, calibration_params, WIDTH, HEIGHT):
     """
@@ -1063,7 +1067,7 @@ def run_blink_calibration(eog_thread, window, font, clock, calibration_params, W
 
     # Process signals using process_eog_signals
     try:
-        H, V, V_compensated = process_eog_signals(
+        H_denoised, V_denoised, V_compensated, V_raw = process_eog_signals(
             ch7, ch2, ch3, ch5, calibration_params
         )
     except Exception as e:
@@ -1074,77 +1078,53 @@ def run_blink_calibration(eog_thread, window, font, clock, calibration_params, W
         return {"blink_threshold": BLINK_THRESHOLD}
     
 
-    # Plot and detect blinks using the shared function
-    if DEBUG_PLOTS:
+    # Process in same-sized windows as real-time detection
+    window_size = DETECT_MAX_SAMPLES  # 125 samples = 0.5s, same as eog_thread
+    step_size = window_size // 2
+    peak_vals = []
+
+    for start in range(0, len(ch7) - window_size, step_size):
         try:
-            # Use the shared blink detection function
-            blink_samples = detect_blinks_in_signal(V_compensated, FS, new_default_blink_threshold, BLINK_MIN_DURATION, BLINK_MAX_DURATION)
-            # Plot the blink calibration data
-            min_len = min(len(times), len(V_compensated))
-            times = times[:min_len]
-            V_compensated = V_compensated[:min_len]
-            plot_blink_calibration(V_compensated, times, blink_samples,
-                                 title="Blink Calibration Sequence")
+            _, V_dn_w, _, _ = process_eog_signals(
+                ch7[start:start+window_size],
+                ch2[start:start+window_size],
+                ch3[start:start+window_size],
+                ch5[start:start+window_size],
+                calibration_params
+            )
+            if len(V_dn_w) == 0:
+                continue
+            peaks, _ = find_peaks(
+                V_dn_w,
+                distance=int(0.1 * FS),
+                width=(int(BLINK_MIN_DURATION * FS), int(BLINK_MAX_DURATION * FS))
+            )
+            if len(peaks) > 0:
+                peak_vals.append(float(np.max(V_dn_w[peaks])))
         except Exception as e:
-            print(f"Error plotting blink calibration: {e}")
-            import traceback
-            traceback.print_exc()
+            print(f"Error processing blink calibration window at {start}: {e}")
+            continue
 
-    # Calculate blink threshold using the same detection logic    # Calculate blink threshold using the same detection logic
-    try:
-        blink_samples = detect_blinks_in_signal(V_compensated, FS, new_default_blink_threshold, BLINK_MIN_DURATION, BLINK_MAX_DURATION)
-        if len(blink_samples) >= BLINK_MIN_SAMPLES:
-            # Extract peak values for threshold calculation
-            peak_values = [sample['peak_value'] for sample in blink_samples]
-            # Use robust statistics for threshold calculation
-            mean_peak = np.mean(peak_values)
-            std_peak = np.std(peak_values)
-            # Calculate threshold as mean * multiplier (found manually)
-            blink_threshold = mean_peak * BLINK_THRESHOLD_MULTIPLIER
+    print(f"Blink calibration: found {len(peak_vals)} peak values: {[f'{v:.3f}' for v in peak_vals]}")
 
-            # Ensure minimum threshold relative to 'up' threshold
-            blink_threshold = max(blink_threshold, 2 * calibration_params["thresholds"]["up"]) #M: takes the larger value of the 2
+    eog_thread.record_raw = False
+    eog_thread.save_raw_data(os.path.join(RESULTS_DIR, "blink_calibration_raw_signals.csv"))
 
-            #M: update eog_thread's threshold to the calculated one (3rd threshold):
-            # eog_thread.blink_threshold = blink_threshold
-            eog_thread.calibration_params['blink_threshold'] = blink_threshold
+    if len(peak_vals) >= BLINK_MIN_SAMPLES:
+        mean_peak = np.mean(peak_vals)
+        blink_threshold = mean_peak * BLINK_THRESHOLD_MULTIPLIER
+        blink_threshold = max(blink_threshold, 2 * calibration_params["thresholds"]["up"])
+        eog_thread.calibration_params['blink_threshold'] = blink_threshold
+        print(f"Blink calibration successful:")
+        print(f"- {len(peak_vals)} valid peaks found")
+        print(f"- Mean peak amplitude: {mean_peak:.3f}")
+        print(f"- Calculated blink threshold: {blink_threshold:.3f}")
+        return {"blink_threshold": blink_threshold}
+    else:
+        print(f"Warning: only {len(peak_vals)} valid peaks (minimum {BLINK_MIN_SAMPLES} required), returning default")
+        return {"blink_threshold": 0.9}
 
-            print(f"Blink calibration successful:")
-            print(f"- Detected {len(blink_samples)} valid blinks")
-            print(f"- Mean peak amplitude: {mean_peak:.3f}")
-            print(f"- Std dev of peaks: {std_peak:.3f}")
-            print(f"- Calculated blink threshold: {blink_threshold:.3f}")
-
-            #M: stop recording signal for raw data saving
-            eog_thread.record_raw = False
-            eog_thread.save_raw_data(os.path.join(RESULTS_DIR, "blink_calibration_raw_signals.csv"))
-
-            return {"blink_threshold": blink_threshold}
-        
-        else:
-            print(f"Warning: Only {len(blink_samples)} valid blinks detected (minimum {BLINK_MIN_SAMPLES} required)")
-            #M: stop recording signal for raw data saving
-            eog_thread.record_raw = False
-            eog_thread.save_raw_data(os.path.join(RESULTS_DIR, "blink_calibration_raw_signals.csv"))
-            print(f'CALIB: RETURNS TO 1ST DEFAULT THRESHOLD')
-            return {"blink_threshold": BLINK_THRESHOLD}
-
-    except Exception as e:
-        print(f"Error calculating blink threshold: {e}")
-        import traceback
-        traceback.print_exc()
-        print(f'CALIB: RETURNS TO 1ST DEFAULT THRESHOLD')
-       # eog_thread.blink_threshold = BLINK_THRESHOLD
-
-        #M: stop recording signal for raw data saving
-        eog_thread.record_raw = False
-        eog_thread.save_raw_data(os.path.join(RESULTS_DIR, "blink_calibration_raw_signals.csv"))
-
-        print(f'CALIB: RETURNS TO 1ST DEFAULT THRESHOLD')
-        return {"blink_threshold": BLINK_THRESHOLD}
-    
-
-def plot_blink_calibration(V_compensated, times, blink_samples, title="Blink Calibration"):
+def plot_blink_calibration(V_denoised, times, blink_samples, title="Blink Calibration"):
     """
     Plot the blink calibration data with detected blinks marked.
       Enhanced with better visualization and statistics.
@@ -1155,14 +1135,14 @@ def plot_blink_calibration(V_compensated, times, blink_samples, title="Blink Cal
         plt.figure(figsize=(14, 7))
 
         # Plot the V_compensated signal
-        plt.plot(times, V_compensated, label='V signal (compensated)', alpha=0.7, color='blue')
+        plt.plot(times, V_denoised, label='V signal (denoised)', alpha=0.7, color='blue')
 
         # Add horizontal line at mean value
-        mean_val = np.mean(V_compensated)
+        mean_val = np.mean(V_denoised)
         plt.axhline(y=mean_val, color='green', linestyle='--', alpha=0.5, label=f'Mean: {mean_val:.2f}')
 
         # Add horizontal lines at ±std
-        std_val = np.std(V_compensated)
+        std_val = np.std(V_denoised)
         plt.axhline(y=mean_val + std_val, color='orange', linestyle=':', alpha=0.5, label=f'±1σ')
         plt.axhline(y=mean_val - std_val, color='orange', linestyle=':', alpha=0.5)
 
@@ -1194,7 +1174,7 @@ def plot_blink_calibration(V_compensated, times, blink_samples, title="Blink Cal
 
         plt.title(title)
         plt.xlabel('Time (s)')
-        plt.ylabel('V signal (compensated)')
+        plt.ylabel('V signal (denoised)')
         plt.legend(loc='upper right')
         plt.grid(True, alpha=0.3)
 

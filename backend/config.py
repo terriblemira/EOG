@@ -20,14 +20,14 @@ FS = 250 #sampling frequency
 PLOT_BUFFER_DURATION = 5
 PLOT_MAX_SAMPLES = FS * PLOT_BUFFER_DURATION
 DETECT_WINDOW_DURATION = 0.5 # size of window in which signal is processed at once (!! attention: should be smaller than cooldown, so not same signal being shown twice/more)
-DETECT_MAX_SAMPLES = int(FS * DETECT_WINDOW_DURATION) #no commas
+DETECT_MAX_SAMPLES = int(FS * DETECT_WINDOW_DURATION) #no commas #M: ACTUAL DETECTING WINDOW SIZE
 TOTAL_CHANNELS = 8
 CHANNEL_INDICES = [0, 1, 2, 4]  # (we'll form H = ch7 - ch3, V = ch5 - ch2)
 LOWCUT = 0.5  # frequencies for the bandpass filter (filters out everything below 0.5 and above 15 Hz) (0.1 to 0.4 to exclude possible slow drift)
 HIGHCUT = 15
 FILTER_ORDER = 2 # how "strictly" it cuts the excluded frequencies out (bandpass filter not perfect, always lets some "forbidden frequencies" slide through) (the higher the stricter)!!if too high: phases get messed up (like cutting parts out of sin/cos)
 MERGE_WINDOW = int(0.12 * FS)  # samples
-GLOBAL_COOLDOWN = 0.5  # seconds between ANY two accepted detections
+GLOBAL_COOLDOWN = 1  # seconds between ANY two accepted detections
 LSL_STREAM_NAME = 'Explore_8441_ExG'
 DETECT_PERIOD = 0.1
 
@@ -42,9 +42,9 @@ BLINK_PROMPT_INTERVAL = 2.5       # Time between blink prompts (seconds)
 BLINK_MIN_SAMPLES = 3             # Minimum number of good blink samples needed
 BLINK_MAX_SAMPLES = 50            # Maximum number of blink samples to collect
 BLINK_THRESHOLD_MULTIPLIER = 1.5  # Multiplier for standard deviation to set threshold
-BLINK_MIN_DURATION = 0.075          # Minimum blink duration (seconds)
-BLINK_MAX_DURATION = 2         # Maximum blink duration (seconds)
-BLINK_THRESHOLD = 300            #M: 1st Default blink detection threshold, HIGH!!; initialized in init from eog_reader, just for redoing option (is replaced by new_default_blink threshold bf blink calibration)
+BLINK_MIN_DURATION = 0.02          # Minimum blink duration (seconds)
+BLINK_MAX_DURATION = 1         # Maximum blink duration (seconds)
+BLINK_THRESHOLD = 200            #M: 1st Default blink detection threshold, HIGH!!; initialized in init from eog_reader, just for redoing option (is replaced by new_default_blink threshold bf blink calibration)
 BLINK_COOLDOWN = 0.5             # Minimum time between detected blinks (seconds)
 DOUBLE_BLINK_COOLDOWN = 5 # Cooldown between 2 double-blinks (avoids redoing 2 times in calibration in 1 redo period)
 # other constants

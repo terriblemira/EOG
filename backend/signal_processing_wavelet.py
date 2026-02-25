@@ -171,12 +171,12 @@ def process_eog_signals(ch7, ch2, ch3, ch5, calibration_params=None):
     # Ensure arrays are same length
     min_len = min(len(ch7), len(ch2), len(ch3), len(ch5))
     if min_len == 0:
-        return np.array([]), np.array([]), np.array([])
+        return np.array([]), np.array([]), np.array([]), np.array([])
 
     # Check if data is long enough for processing
     if min_len < MIN_SIGNAL_LENGTH:
         # Return empty arrays if data is too short
-        return np.array([]), np.array([]), np.array([])
+        return np.array([]), np.array([]), np.array([]), np.array([])
 
     ch7 = ch7[:min_len]
     ch2 = ch2[:min_len]
@@ -191,7 +191,7 @@ def process_eog_signals(ch7, ch2, ch3, ch5, calibration_params=None):
         ch5 = process_signal(ch5, FS, "ch5")
     except Exception as e:
         print(f"Error processing individual channels: {e}")
-        return np.array([]), np.array([]), np.array([])
+        return np.array([]), np.array([]), np.array([]), np.array([])
 
     # Normalize
     try:
@@ -201,7 +201,7 @@ def process_eog_signals(ch7, ch2, ch3, ch5, calibration_params=None):
         ch5 /= calibration_params["channel_norm_factors"]["ch5"]
     except Exception as e:
         print(f"Error normalizing channels: {e}")
-        return np.array([]), np.array([]), np.array([])
+        return np.array([]), np.array([]), np.array([]), np.array([])
 
     # H and V signals
     try:
@@ -209,7 +209,7 @@ def process_eog_signals(ch7, ch2, ch3, ch5, calibration_params=None):
         V_raw = ch5 - ch2
     except Exception as e:
         print(f"Error calculating H and V signals: {e}")
-        return np.array([]), np.array([]), np.array([])
+        return np.array([]), np.array([]), np.array([]), np.array([])
 
     # Baseline correction
     try:
@@ -217,7 +217,7 @@ def process_eog_signals(ch7, ch2, ch3, ch5, calibration_params=None):
         V_raw -= calibration_params["baselines"]["V"]
     except Exception as e:
         print(f"Error applying baseline correction: {e}")
-        return np.array([]), np.array([]), np.array([])
+        return np.array([]), np.array([]), np.array([]), np.array([])
 
     # Wavelet denoising with error handling
     def wavelet_denoise(x, wavelet='bior3.1', level=2):
@@ -240,7 +240,7 @@ def process_eog_signals(ch7, ch2, ch3, ch5, calibration_params=None):
         V_denoised = wavelet_denoise(V_raw)
     except Exception as e:
         print(f"Error in wavelet denoising: {e}")
-        return np.array([]), np.array([]), np.array([])
+        return np.array([]), np.array([]), np.array([]), np.array([])
 
     # Alpha compensation (vertical)
     try:
@@ -258,75 +258,77 @@ def process_eog_signals(ch7, ch2, ch3, ch5, calibration_params=None):
         else:
             # Simple time-domain compensation for small alpha values
             V_compensated = V_denoised - alpha * H_denoised
-        V_compensated = V_denoised - alpha * H_denoised
+        V_compensated = V_denoised - alpha * H_denoised ##THIS IS DANGEROUS: Neggletcts if-condition (should?)
     except Exception as e:
         print(f"Error in alpha compensation: {e}")
-        return np.array([]), np.array([]), np.array([])
+        return np.array([]), np.array([]), np.array([]), np.array([])
 
     # Final low-pass smoothing with error handling
     try:
         sos = sig.butter(2, 20 / (FS/2), btype='low', output='sos')
         H_filt = sig.sosfilt(sos, H_denoised)
         V_filt = sig.sosfilt(sos, V_compensated)
-        return H_filt, V_denoised, V_filt
+        return H_filt, V_denoised, V_filt, V_raw
     except Exception as e:
         print(f"Error in final smoothing: {e}")
-        return H_denoised, V_denoised, V_compensated  # Return without final smoothing
+        return H_denoised, V_denoised, V_compensated, V_raw  # Return without final smoothing
 
-def detect_blinks(V_compensated, fs, blink_threshold=BLINK_THRESHOLD):
+def detect_blinks(V_denoised, fs, blink_threshold=BLINK_THRESHOLD):
     """
     Detect blinks in the vertical EOG signal.
     Returns a list of blink events with start, end, and peak information.
     """
     # Check if signal is long enough
-    print(f"DEBUG: SIG_PROC_WAVE: DETECT_BLINKS(): blink_threshold= {blink_threshold} (should be new_default_blink_threshold)")
+    #print(f"DEBUG: SIG_PROC_WAVE: DETECT_BLINKS(): blink_threshold= {blink_threshold} (should be new_default_blink_threshold)")
 
-    if len(V_compensated) < MIN_SIGNAL_LENGTH:
-        print(f"Warning: Signal too short for blink detection ({len(V_compensated)} < {MIN_SIGNAL_LENGTH} samples)")
+    if len(V_denoised) < MIN_SIGNAL_LENGTH:
+        print(f"Warning: Signal too short for blink detection ({len(V_denoised)} < {MIN_SIGNAL_LENGTH} samples)")
         return []
 
     try:
         # Find peaks in the absolute value of the signal
         peaks, properties = find_peaks(
-            np.abs(V_compensated),
+            V_denoised,  # Only consider positive peaks (blinks typically show as positive peaks in V)
             height=blink_threshold,
             distance=int(0.1 * fs),
-            width=(int(0.03 * fs), int(0.3 * fs))
+            width=(int(BLINK_MIN_DURATION * fs), int(BLINK_MAX_DURATION * fs))
         )
 
         blink_events = []
         for peak_idx in peaks:
             try:
-                peak_value = V_compensated[peak_idx]
+                peak_value = V_denoised[peak_idx]
 
                 # Only consider positive peaks (blinks typically show as positive peaks in V)
-                if peak_value > blink_threshold:
+                #if peak_value > blink_threshold:
                     # Find the start and end of the blink
-                    half_peak = peak_value / 2
+                half_peak = peak_value / 2
 
-                    # Search backward for the start
-                    start_idx = peak_idx
-                    while start_idx > 0 and np.abs(V_compensated[start_idx]) > half_peak:
-                        start_idx -= 1
+                # Search backward for the start
+                start_idx = peak_idx
+                while start_idx > 0 and np.abs(V_denoised[start_idx]) > half_peak:
+                    start_idx -= 1
 
-                    # Search forward for the end
-                    end_idx = peak_idx
-                    while end_idx < len(V_compensated) - 1 and np.abs(V_compensated[end_idx]) > half_peak:
-                        end_idx += 1
+                # Search forward for the end
+                end_idx = peak_idx
+                while end_idx < len(V_denoised) - 1 and np.abs(V_denoised[end_idx]) > half_peak:
+                    end_idx += 1
 
-                    # Calculate duration in seconds
-                    duration = (end_idx - start_idx) / fs
+                # Calculate duration in seconds
+                duration = (end_idx - start_idx) / fs
 
-                    # Only accept blinks with reasonable duration
-                    if BLINK_MIN_DURATION <= duration <= BLINK_MAX_DURATION:
-                        blink_events.append({
-                            'peak_index': peak_idx,
-                            'start_index': start_idx,
-                            'end_index': end_idx,
-                            'peak_value': peak_value,
-                            'duration': duration,
-                            'peak_time': peak_idx / fs
-                        })
+                # Only accept blinks with reasonable duration
+                if BLINK_MIN_DURATION <= duration <= BLINK_MAX_DURATION:
+                    blink_events.append({
+                        'peak_index': peak_idx,
+                        'start_index': start_idx,
+                        'end_index': end_idx,
+                        'peak_value': peak_value,
+                        'duration': duration,
+                        'peak_time': peak_idx / fs
+                    })
+                else:
+                    print(f'SIGN_PROC_WAVE: DETECT_BLINKS: DEBUG: blink not within min & max duration ({duration})')
             except Exception as e:
                 print(f"Error processing peak {peak_idx}: {e}")
                 continue
@@ -342,28 +344,36 @@ def process_eog_signals_with_blinks(ch7, ch2, ch3, ch5, calibration_params=None)
     Returns H, V, V_compensated, and blink_events.
     """
     # First get the standard processed signals
-    H, V, V_compensated = process_eog_signals(ch7, ch2, ch3, ch5, calibration_params)
-
+    H_denoised, V_denoised, V_compensated, V_raw = process_eog_signals(ch7, ch2, ch3, ch5, calibration_params)
+    #print(f"DEBUG: SIG_PROC_WAVE: PROC_EOG_SIG_W_BLINKS: original size (comp. to min_len): H: {len(H)}, V: {len(V)}, V_comp: {len(V_compensated)}, if V_comp very short bc a lot filtered out --> could b cause many blinks get discharged")
     # Check if we got valid signals
-    if len(H) == 0 or len(V) == 0 or len(V_compensated) == 0:
-        print(f"DEBUG: SIG_PROC_WAVE: len(H), len(V) or len(V_compensated == 0), no valid signals")
+    if len(H_denoised) == 0 or len(V_denoised) == 0 or len(V_compensated) == 0:
+        #print(f"DEBUG: SIG_PROC_WAVE: PROC_EOG_SIG_W_BLINKS: len(H), len(V) or len(V_compensated == 0), no valid signals")
         return np.array([]), np.array([]), np.array([]), []
     
      # Ensure all arrays have the same length
-    min_len = min(len(H), len(V), len(V_compensated))
-    H = H[:min_len]
-    V = V[:min_len]
+    min_len = min(len(H_denoised), len(V_denoised), len(V_compensated), len(V_denoised))
+    #print(f"DEBUG: SIG_PROC_WAVE: PROC_EOG_SIG_W_BLINKS: min_len: {min_len}")
+    H_denoised = H_denoised[:min_len]
+    V_denoised = V_denoised[:min_len]
     V_compensated = V_compensated[:min_len]
+
+    #print(f"DEBUG: SIG_PROC_WAVE: PROC_EOG_SIG_W_BLINKS: calibration_params: {calibration_params}")
 
 # update for run_blink_calibration etc. if was updated in eog_reader/ calibration arleady (make sure using the righ default/calculated threshold)
     blink_threshold = calibration_params.get('blink_threshold', BLINK_THRESHOLD) if calibration_params else BLINK_THRESHOLD
-    print(f"DEBUG: SIG_PROC_WAVE: PROC_EOG_SIG_W_BLINKS: blink_threshold = {blink_threshold}")
+    #print(f"DEBUG: SIG_PROC_WAVE: PROC_EOG_SIG_W_BLINKS: blink_threshold = {blink_threshold}")
     # Detect blinks in the V signal
-    blink_events = detect_blinks(V_compensated, FS, blink_threshold)
-    print(f"DEBUG: SIG_PROC_WAVE: PROC_EOG_SIG_W_BLINKS: blink_events: {len(blink_events)}")
+    blink_events = detect_blinks(V_denoised, FS, blink_threshold)
 
+    for b in blink_events:
+        if not (BLINK_MIN_DURATION <= b['duration'] <= BLINK_MAX_DURATION):
+          print(f"DEBUG: Rejected blink: duration={b['duration']:.3f}s (min={BLINK_MIN_DURATION}s, max={BLINK_MAX_DURATION}s)")
+
+    #print(f"DEBUG: SIG_PROC_WAVE: PROC_EOG_SIG_W_BLINKS: blink_events: {len(blink_events)}")
+    
     #M: filter out blinks with index (starting at 0) bigger than min_len, so not more blinks than min_len of other arrays
     valid_blink_events = [b for b in blink_events if b['peak_index'] < min_len]
-    print(f"DEBUG: SIG_PROC_WAVE: PROC_EOG_SIG_W_BLINKS: blink_events: {len(valid_blink_events)}")
+    #print(f"DEBUG: SIG_PROC_WAVE: PROC_EOG_SIG_W_BLINKS: blink_events: {len(valid_blink_events)}")
 
-    return H, V, V_compensated, valid_blink_events
+    return H_denoised, V_denoised, V_compensated, valid_blink_events

@@ -10,7 +10,7 @@ import app
 import threading
 import webbrowser
 import minecraft_control
-from calibration import run_calibration, run_blink_calibration, save_and_update_calib_data
+from calibration import run_calibration, run_blink_calibration, save_and_update_calib_data, update_calib_data_for_blink_calib
 import test
 import utils
 
@@ -37,13 +37,14 @@ def main():
 
 # 2. RUN CALIBRATION
     calibration_params = run_calibration(eog_thread, window, font, clock, WIDTH, HEIGHT)
+    update_calib_data_for_blink_calib(eog_thread, calibration_params)
     blink_calibration_results = run_blink_calibration(eog_thread, window, font, clock, calibration_params, WIDTH, HEIGHT)
 # 3. SAVE AND UPDATE CALIBRATION DATA
     saved_calibration_data = save_and_update_calib_data(eog_thread, calibration_params, blink_calibration_results)
     #if saved_calibration_data:  #M: if calib was not quit with key "q" or unsuccessful:  
 # 4. RUN/SKIP TEST
     test.run_test(eog_thread, calibration_params, window, font, clock, WIDTH, HEIGHT, saved_calibration_data, actual_width, actual_height) #M: run main function from test
-
+    eog_thread.plot_full_signal()  # Plot the full V_compensated signal over time before stopping
       
 
 # 5. START MOUSE- & KEYBOARD-REPLACEMENT

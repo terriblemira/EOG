@@ -3,6 +3,7 @@
 import threading
 import collections
 import numpy as np
+import matplotlib.pyplot as plt
 import time
 from pylsl import StreamInlet, resolve_byprop
 from signal_processing_wavelet import process_eog_signals, process_eog_signals_with_blinks
@@ -80,11 +81,19 @@ class EOGReader(threading.Thread):
 
         # For detection - store detection window data
         self.latest_H = np.array([])
-        self.latest_V = np.array([])
+        self.latest_V_denoised = np.array([])
         self.latest_times = np.array([])
 
         self.debug_counter = 0
         self.last_plot_update = time.time()
+
+                #M: FOR BLINK DEBUGGING: to check V_copensated how changes over time
+        self.V_compensated_buffer = []  # Stores the full compensated signal
+        self.blink_times = []          # Stores timestamps of detected blinks
+        self.blink_indices = []        # Stores sample indices of detected blinks
+        self.global_sample_offset = 0  # Tracks total samples processed (for indexing)
+
+
 
 #M: add marker for pause between calib sequences (for csv file): Extra row with START_PAUSE/STOP_PAUSE
     def add_pause_marker(self, marker_type):
@@ -298,27 +307,39 @@ class EOGReader(threading.Thread):
             ch5 = ch5[-min_length:]
 
             # process signals with alpha compensation (unpack values from process_eog_...)
-            H_corrected, V, V_compensated, valid_blink_events = process_eog_signals_with_blinks(ch7, ch2, ch3, ch5, self.calibration_params)
+            _,_,_, V_raw = process_eog_signals(ch7, ch2, ch3, ch5, self.calibration_params) 
+            H_corrected, V_denoised, V_compensated, valid_blink_events = process_eog_signals_with_blinks(ch7, ch2, ch3, ch5, self.calibration_params) #M: H_corr = H_denoised
+            #M: DEBUG create Plot for V_comp over time (BLINK debugging)
+            # Append the new V_compensated to the buffer
+            self.V_compensated_buffer.extend(V_raw) #M: actually should b V_compens. in brackets just changed temporarily to check how denoised changes over time (hopefully not in amplitude like normalized V_comp. after calibration.py!)
+
+            # Append detected blinks (adjust peak_index for global offset)
+            for b in valid_blink_events:
+                self.blink_times.append(time.time())
+                self.blink_indices.append(self.global_sample_offset + b['peak_index'])
+
+            # Update the global sample offset
+            self.global_sample_offset += len(V_denoised)
 
                      # Calculate velocity (derivative)
             dt = 1.0 / config.FS
             H_velocity = np.gradient(H_corrected, dt)
-            V_velocity = np.gradient(V_compensated, dt)
+            V_velocity = np.gradient(V_denoised, dt)
 
             if len(H_velocity) < len(H_corrected):
                 H_velocity = np.pad(H_velocity, (0, len(H_corrected) - len(H_velocity)), mode='edge') #pad adds gradient for the last sample (bc else there is just a gradient from "1st to 2nd sample, 2nd to 3rd sample, ..." but not possible "last to (None) sample")
             if len(V_velocity) < len(V_compensated):
-                V_velocity = np.pad(V_velocity, (0, len(V_compensated) - len(V_velocity)), mode='edge')
+                V_velocity = np.pad(V_velocity, (0, len(V_denoised) - len(V_velocity)), mode='edge')
 
           #Ensure the processed signals (arrays) have the same length as times array
-            min_processed_length = min(len(times), len(H_corrected), len(V), len(V_compensated), len(H_velocity), len(V_velocity)) #M: takes shortest length out of all the processed-signal-arrays and time-array
+            min_processed_length = min(len(times), len(H_corrected), len(V_compensated), len(H_velocity), len(V_velocity), len(V_denoised)) #M: takes shortest length out of all the processed-signal-arrays and time-array
             if min_processed_length < min_length: # if somewhere array shortened by processing: 
                 print(f"Warning: Processed signals shorter than expected ({min_processed_length} < {min_length})")
                 # Trim all arrays to the shortest length (trim from the start, as )
                 times = times[:min_processed_length]
                 H_corrected = H_corrected[:min_processed_length]
-                V = V[:min_processed_length]
                 V_compensated = V_compensated[:min_processed_length]
+                V_denoised = V_denoised[:min_processed_length]
                 H_velocity = H_velocity[:min_processed_length]
                 V_velocity = V_velocity[:min_processed_length] # cut all to new shortest length ("-...:" ensures its cutting all from the , also bc most(all here) processing filters trim from start)
 
@@ -330,7 +351,7 @@ class EOGReader(threading.Thread):
 
             # Update latest signals for detection
             self.latest_H = H_corrected
-            self.latest_V = V_compensated
+            self.latest_V_denoised = V_denoised
             self.latest_times = times
 
             # Get current time for cooldown checks
@@ -341,12 +362,12 @@ class EOGReader(threading.Thread):
             for blink in valid_blink_events:
                 # Check cooldown
                 if (current_time - self.last_blink_time) < config.BLINK_COOLDOWN:
-                    print(f"DEBUG: EOG_READER: PROCESS_DETECTION_WIN: blink event within BLINK_COOLDOWN --> ignored")
+                   # print(f"DEBUG: EOG_READER: PROCESS_DETECTION_WIN: blink event within BLINK_COOLDOWN --> ignored")
                     continue
-                print(f"DEBUG: EOG_READER: PROCESS_DETECTION_WIN: self.calibration_params['blink_threshold'] = {self.calibration_params['blink_threshold']}")
+                #print(f"DEBUG: EOG_READER: PROCESS_DETECTION_WIN: self.calibration_params['blink_threshold'] = {self.calibration_params['blink_threshold']}")
                 # Check if the blink peak is above the blink threshold
-                if abs(V_compensated[blink['peak_index']]) < self.calibration_params['blink_threshold']:
-                    print(f"DEBUG: EOG_READER: PROCESS_DETECTION_WIN: vertical signal during blink peak smaller than eog_thread.calibr_p[blink_threshold]")
+                if abs(V_denoised[blink['peak_index']]) < self.calibration_params['blink_threshold']:
+                   # print(f"DEBUG: EOG_READER: PROCESS_DETECTION_WIN: vertical signal during blink peak smaller than eog_thread.calibr_p[blink_threshold]")
                     continue  # Ignore small peaks
 
                 # Create a blink detection
@@ -357,7 +378,7 @@ class EOGReader(threading.Thread):
                     is_blink=True,
                     blink_duration=blink['duration'],
                     h_value=H_corrected[blink['peak_index']],
-                    v_value=V_compensated[blink['peak_index']],
+                    v_value=V_denoised[blink['peak_index']],
                     h_velocity=H_velocity[blink['peak_index']],
                     v_velocity=V_velocity[blink['peak_index']]
                 )
@@ -546,7 +567,7 @@ class EOGReader(threading.Thread):
                     continue
 
                 # difference to horizontal detection: Check if this is actually a blink (above blink threshold)
-                if V_compensated[crossing_idx] > self.calibration_params['blink_threshold']: 
+                if V_denoised[crossing_idx] > self.calibration_params['blink_threshold']: 
                     continue
 
                 # # Look for a down deflection after this up crossing Commented out, might be useful later
@@ -601,7 +622,7 @@ class EOGReader(threading.Thread):
                     continue
 
                 # Check if this is actually a blink (below negative blink threshold)
-                if V_compensated[crossing_idx] < -self.calibration_params['blink_threshold']:
+                if V_denoised[crossing_idx] < -self.calibration_params['blink_threshold']:
                     continue
 
                 # # Look for an up deflection after this down crossing Commented out, might be useful later
@@ -704,16 +725,17 @@ class EOGReader(threading.Thread):
                         ch5 = ch5[-min_length:]
 
                         # Process signals with alpha compensation
-                        print(f"DEBUG: EOG_READER: RUN(): self.calibration_params = {self.calibration_params}, that's given onto process_eog_signals_w_blinks")
-                        H_corrected, V_corrected, V_compensated, _ = process_eog_signals_with_blinks(
+                        #print(f"DEBUG: EOG_READER: RUN(): self.calibration_params = {self.calibration_params}, that's given onto process_eog_signals_w_blinks")
+                        H_corrected, V_denoised, V_compensated, _ = process_eog_signals_with_blinks( #M: H_corr = H_denoised
                             ch7, ch2, ch3, ch5, self.calibration_params
                         )
 
                         # Check if we got valid results
-                        if all(isinstance(arr, np.ndarray) and len(arr) > 0 for arr in [H_corrected, V_corrected, V_compensated]):
+                        if all(isinstance(arr, np.ndarray) and len(arr) > 0 for arr in [H_corrected, V_denoised, V_compensated]):
                             # Update full buffers for plotting
                             self.full_H = H_corrected
                             self.full_V = V_compensated
+                            self.full_V_denoised = V_denoised
                             self.full_times = times
                 except Exception as e:
                     print(f"Error in plotting processing: {str(e)}")
@@ -726,6 +748,25 @@ class EOGReader(threading.Thread):
             if required_samples > 10 and (current_time - last_detection_check) >= DETECT_PERIOD:
                 last_detection_check = current_time
                 self.process_detection_window()
+
+    def plot_full_signal(self):
+        if not self.V_compensated_buffer:
+            return
+
+        plt.figure(figsize=(12, 6))
+        plt.plot(self.V_compensated_buffer, label="V_raw (Full Session)", alpha=0.7)
+
+        # Plot vertical lines for all detected blinks
+        for idx in self.blink_indices:
+            plt.axvline(x=idx, color='red', linestyle='--', alpha=0.5)
+
+        plt.title("Full V_raw Signal with All Detected Blinks")
+        plt.xlabel("Sample Index (Global)")
+        plt.ylabel("Amplitude")
+        plt.legend()
+        plt.savefig("results/v_raw_plot.png")  # Save to file
+        plt.show()  # Or use plt.show(block=False) for non-blocking
+
 
     def stop(self):
         """Stop the thread"""
