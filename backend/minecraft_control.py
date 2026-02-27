@@ -69,7 +69,7 @@ class MouseKeyboardReplacement(threading.Thread):
                 self.left_start_time = time.time()
                 while time.time() - self.left_start_time < config.TURNING_COOLDOWN:  #M: COOLDOWN: Ignore opposite direction signal for 0.5 seconds
                     #pyautogui.moveRel(-self.speed, 0) #M: moves 1 time by 10 pixels --> has to be IN while-loop, not like keyDown
-                    while not self.eog_reader.signal.empty:
+                    while not self.eog_reader.signal.empty():
                         try:
                             self.eog_reader.signal.get_nowait()  #M: clear queue to avoid getting old signals during cooldown
                         #pyautogui.moveRel(0, -self.speed)
@@ -96,7 +96,7 @@ class MouseKeyboardReplacement(threading.Thread):
                 self.rightPressed = True
                 self.right_start_time = time.time()
                 while time.time() - self.right_start_time < config.TURNING_COOLDOWN:  #M: COOLDOWN: Ignore direction signal for 0.5 seconds
-                    while not self.eog_reader.signal.empty:
+                    while not self.eog_reader.signal.empty():
                         try:
                             self.eog_reader.signal.get_nowait()  #M: clear queue to avoid getting old signals during cooldown
                         #pyautogui.moveRel(0, -self.speed)
@@ -125,7 +125,7 @@ class MouseKeyboardReplacement(threading.Thread):
                 #self.upPressed = True
                 start_time = time.time()
                 while time.time() - start_time < config.TURNING_COOLDOWN:  #M: COOLDOWN: Ignore opposite direction signal for 0.5 seconds
-                    while not self.eog_reader.signal.empty:
+                    while not self.eog_reader.signal.empty():
                         try:
                             self.eog_reader.signal.get_nowait()  #M: clear queue to avoid getting old signals during cooldown
                         #pyautogui.moveRel(0, -self.speed)
@@ -154,7 +154,7 @@ class MouseKeyboardReplacement(threading.Thread):
                 start_time = time.time()
                 while time.time() - start_time < config.TURNING_COOLDOWN:  #M: COOLDOWN: Ignore opposite direction signal for 0.5 seconds
                     #pyautogui.moveRel(0, self.speed)
-                    while not self.eog_reader.signal.empty:
+                    while not self.eog_reader.signal.empty():
                         try:
                             self.eog_reader.signal.get_nowait()  #M: clear queue to avoid getting old signals during cooldown
                         #pyautogui.moveRel(0, -self.speed)

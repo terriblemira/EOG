@@ -13,6 +13,8 @@ import minecraft_control
 from calibration import run_calibration, run_blink_calibration, save_and_update_calib_data, update_calib_data_for_blink_calib
 import test
 import utils
+import subprocess
+import paths
 
 def start_appy(): 
     uvicorn.run(app.app, reload=False)
@@ -47,8 +49,13 @@ def main():
     eog_thread.plot_full_signal()  # Plot the full V_compensated signal over time before stopping
       
 
-# 5. START MOUSE- & KEYBOARD-REPLACEMENT
+
    # if test.calib_and_test_completed:
+# 5. OPEN MINECRAFT (CHANGE TO YOUR PATH)
+
+    subprocess.Popen(paths.minecraft_path_mac_Mira)
+
+# 6. START MOUSE- & KEYBOARD-REPLACEMENT
     mouseKeyboard_thread = minecraft_control.MouseKeyboardReplacement(eog_thread)
     mouseKeyboard_thread.start() #M: calls run() - method in minecraft_control in MouseReplacement
     #keyboard_thread = minecraft_control.KeyBoardReplacement()
