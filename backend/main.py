@@ -50,17 +50,17 @@ def main():
     test.run_test(eog_thread, calibration_params, window, font, clock, WIDTH, HEIGHT, saved_calibration_data, actual_width, actual_height) #M: run main function from test
     eog_thread.plot_full_signal()  # Plot the full V_compensated signal over time before stopping
 
-   # if test.calib_and_test_completed:
-# 5. OPEN MINECRAFT (CHANGE TO YOUR PATH)
-    subprocess.Popen(paths.minecraft_path_mac_Mira)
+#    # if test.calib_and_test_completed:
+# # 5. OPEN MINECRAFT (CHANGE TO YOUR PATH)
+#     subprocess.Popen(paths.minecraft_path_mac_Mira)
 
-# 5.2 ACTIVATE MOUSECONTROL (to navigate to Minecraft)
-    mouseControl_thread = mouse_control.MouseControl(eog_thread)
-    mouseControl_thread.start()
-    print("> Mouse Control started. 1 minute to navigate to Minecraft")
-    threading.Timer(60, mouse_control.stop).start() #didnt suggest .stop? --> ERROR?
-    print("> MouseControl for navigating stopped")
-    mouseControl_thread.join() #M: wait until run method of mouseC_thread ends (when stop method sets _stop_event)
+# # 5.2 ACTIVATE MOUSECONTROL (to navigate to Minecraft)
+#     mouseControl_thread = mouse_control.MouseControl(eog_thread)
+#     mouseControl_thread.start()
+#     print("> Mouse Control started. 1 minute to navigate to Minecraft")
+#     threading.Timer(60, mouse_control.stop).start() #didnt suggest .stop? --> ERROR?
+#     print("> MouseControl for navigating stopped")
+#     mouseControl_thread.join() #M: wait until run method of mouseC_thread ends (when stop method sets _stop_event)
 
 # 6. START MOUSE- & KEYBOARD-REPLACEMENT
     mouseKeyboard_thread = minecraft_control.MouseKeyboardReplacement(eog_thread)

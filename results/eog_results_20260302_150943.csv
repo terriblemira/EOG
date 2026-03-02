@@ -1,0 +1,10 @@
+step_index,target_name,expected_h,expected_v,detected_h,detected_v,is_blink,blink_duration,correct,blink_threshold
+,,,,,,,,,
+,SUMMARY,0/0 (0.0%),,,,,,,
+,THRESHOLDS,"Left: 2.2888, Right: 2.0733","Up: 1.0292, Down: 0.6839",,,,,,Blink: 2.0583
+,,,,,,,,,
+,DIRECTION ACCURACY,,,,,,,,
+,left,Correct: 0,False: 0,,,,,0.0%,
+,right,Correct: 0,False: 0,,,,,0.0%,
+,up,Correct: 0,False: 0,,,,,0.0%,
+,down,Correct: 0,False: 0,,,,,0.0%,

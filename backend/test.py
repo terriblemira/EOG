@@ -160,6 +160,7 @@ def run_test(eog_thread, calibration_params, window, font, clock, WIDTH, HEIGHT,
     running_total = 0
     step_captured = False
     current_expected = expected_from_name(sequence[step_index][0])
+    step_detections = []
     direction_stats = {"left": {"correct": 0, "false": 0},
                        "right": {"correct": 0, "false": 0},
                        "up": {"correct": 0, "false": 0},
