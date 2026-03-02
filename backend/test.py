@@ -61,7 +61,7 @@ def run_test(eog_thread, calibration_params, window, font, clock, WIDTH, HEIGHT,
             eog_thread.save_raw_data(os.path.join(RESULTS_DIR, "main_task_raw_signals.csv"))
 
             trials = []
-            save_results(trials, calibration_params) # M: saving of thresholds etc in save_results (csv-file)
+            save_results(trials, calibration_params, direction_stats = direction_stats) # M: saving of thresholds etc in save_results (csv-file)
             
             # Display completion message
             window.fill(BG_COLOR)
@@ -160,6 +160,10 @@ def run_test(eog_thread, calibration_params, window, font, clock, WIDTH, HEIGHT,
     running_total = 0
     step_captured = False
     current_expected = expected_from_name(sequence[step_index][0])
+    direction_stats = {"left": {"correct": 0, "false": 0},
+                       "right": {"correct": 0, "false": 0},
+                       "up": {"correct": 0, "false": 0},
+                       "down": {"correct": 0, "false": 0},}
     running = True
 
     try:
@@ -169,7 +173,7 @@ def run_test(eog_thread, calibration_params, window, font, clock, WIDTH, HEIGHT,
                 if event.type == pygame.QUIT:
                     running = False
 
-            now = time.time()
+            current_time = time.time()
 
             # Track max and min H/V values
             # if len(eog.latest_H) > 0 and len(eog.latest_V) > 0:
@@ -185,6 +189,7 @@ def run_test(eog_thread, calibration_params, window, font, clock, WIDTH, HEIGHT,
             # Initialize detection variables at the start of each loop iteration
             first_h_det = None
             first_v_det = None
+            in_cooldown = (current_time - step_start) < ACCURACY_COOLDOWN
 
             # Process all detections in the queue
             while eog_thread.out_queue:
@@ -194,8 +199,20 @@ def run_test(eog_thread, calibration_params, window, font, clock, WIDTH, HEIGHT,
                 elif not det.is_horizontal and first_v_det is None:
                     first_v_det = det
 
+                if not in_cooldown and not det.is_blink:
+                    step_detections.append(det)
+
             # Handle step advancement
-            if (now - step_start) >= STEP_DURATION:
+            if (current_time - step_start) >= STEP_DURATION:
+                target = sequence[step_index][0]
+                is_directional = target in ("left", "right", "up", "down")
+
+                if is_directional:
+                    correct_count = sum(1 for d in step_detections if d.direction == target)
+                    false_count = sum(1 for d in step_detections if d.direction != target)
+                    direction_stats[target]["correct"] += correct_count
+                    direction_stats[target]["false"] += false_count
+
                 # Determine if the step is correct
                 is_correct = False
 
@@ -270,13 +287,20 @@ def run_test(eog_thread, calibration_params, window, font, clock, WIDTH, HEIGHT,
             pygame.draw.circle(window, BLUE, dot_pos, DOT_RADIUS_ACTIVE)
 
             # Draw overlays
+            def dir_acc_str(d): #direction_accuracy_string
+                c = direction_stats[d]["correct"]
+                f = direction_stats[d]["false"]
+                total = c + f
+                pct = (c / total * 100) if total > 0 else 0.0
+                return f"{d}: {c}correct {f}false ({pct:.0f}%)"
+
             acc = (running_correct / running_total * 100.0) if running_total > 0 else 0.0
             overlay_lines = [
                 f"Step {step_index+1}/{len(sequence)} | Target: {sequence[step_index][0]} | "
-                f"H det: {first_h_det.direction if 'first_h_det' in locals() and first_h_det is not None else 'None'}, "
-                f"V det: {first_v_det.direction if 'first_v_det' in locals() and first_v_det is not None else 'None'}",
-                f"Max H: {step_max_h:.2f}, Max V: {step_max_v:.2f}",
-                f"Score: {running_correct}/{running_total} ({acc:.1f}%)"
+                f"H: {first_h_det.direction if first_h_det is not None else 'None'}, "
+                f"V: {first_v_det.direction if first_v_det is not None else 'None'}",
+                f"{dir_acc_str('left')}  {dir_acc_str('right')}  {dir_acc_str('up')}  {dir_acc_str('down')}",
+                f"Old score: {running_correct}/{running_total} ({acc:.1f}%)"
             ]
             y = 10
             for line in overlay_lines:
@@ -292,9 +316,9 @@ def run_test(eog_thread, calibration_params, window, font, clock, WIDTH, HEIGHT,
 #        eog_thread.stop()
         eog_thread.record_raw = False
         eog_thread.save_raw_data(os.path.join(RESULTS_DIR, "main_task_raw_signals.csv"))
-        save_results(trials, calibration_params) # M: saving of thresholds etc in save_results (csv-file)
+        save_results(trials, calibration_params, direction_stats = direction_stats) # M: saving of thresholds etc in save_results (csv-file)
 
-        # Display completion message
+        # Display completion message  
         window.fill(BG_COLOR)
         completion_surf = font.render("Task complete! DOUBLE BLINK to exit or wait 20 secs.", True, WHITE)
         window.blit(completion_surf, (WIDTH // 2 - completion_surf.get_width() // 2, HEIGHT // 2))
@@ -318,7 +342,7 @@ def run_test(eog_thread, calibration_params, window, font, clock, WIDTH, HEIGHT,
             pygame.event.pump()
             time.sleep(0.01)
             
-def save_results(trials, calibration_params, out_path=None):
+def save_results(trials, calibration_params, out_path=None, direction_stats = None):
     """Save trial results to CSV file"""
     try:
         # Default output path if not provided
@@ -372,6 +396,20 @@ def save_results(trials, calibration_params, out_path=None):
                 "expected_v": f"Up: {calibration_params['thresholds']['up']:.4f}, Down: {calibration_params['thresholds']['down']:.4f}",
                 "blink_threshold": f"Blink: {calibration_params['blink_threshold']:.4f}"
             })
+
+        #M: Add accuracy row
+            if direction_stats:
+                writer.writerow({})
+                writer.writerow({"target_name": "DIRECTION ACCURACY"})
+                for d, stats in direction_stats.items():
+                    total = stats["correct"] + stats["false"]
+                    pct = (stats["correct"] / total * 100) if total > 0 else 0.0
+                    writer.writerow({
+                        "target_name": d,
+                        "expected_h": f"Correct: {stats['correct']}",
+                        "expected_v": f"False: {stats['false']}",
+                        "correct": f"{pct:.1f}%"
+                    })
 
         print(f"Successfully saved results to {out_path}")
         return True

@@ -50,6 +50,7 @@ DOUBLE_BLINK_COOLDOWN = 5 # Cooldown between 2 double-blinks (avoids redoing 2 t
 # other constants
 H_VELOCITY_THRESHOLD = 0.05
 V_VELOCITY_THRESHOLD = 0.05
+ACCURACY_COOLDOWN = 0.5 #M: for test
 
 # MOUSE MOVEMENT
 TURNING_COOLDOWN = 0.5  #M: for Minecraft (mouse_replacement.py): seconds to ignore opposite direction signal after starting turn in one direction
