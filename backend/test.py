@@ -61,7 +61,7 @@ def run_test(eog_thread, calibration_params, window, font, clock, WIDTH, HEIGHT,
             eog_thread.save_raw_data(os.path.join(RESULTS_DIR, "main_task_raw_signals.csv"))
 
             trials = []
-            save_results(trials, calibration_params, direction_stats = direction_stats) # M: saving of thresholds etc in save_results (csv-file)
+            save_results(trials, calibration_params) # M: saving of thresholds etc in save_results (csv-file)
             
             # Display completion message
             window.fill(BG_COLOR)
@@ -317,7 +317,7 @@ def run_test(eog_thread, calibration_params, window, font, clock, WIDTH, HEIGHT,
 #        eog_thread.stop()
         eog_thread.record_raw = False
         eog_thread.save_raw_data(os.path.join(RESULTS_DIR, "main_task_raw_signals.csv"))
-        save_results(trials, calibration_params, direction_stats = direction_stats) # M: saving of thresholds etc in save_results (csv-file)
+        save_results(trials, calibration_params) # M: saving of thresholds etc in save_results (csv-file)
 
         # Display completion message  
         window.fill(BG_COLOR)
@@ -343,7 +343,7 @@ def run_test(eog_thread, calibration_params, window, font, clock, WIDTH, HEIGHT,
             pygame.event.pump()
             time.sleep(0.01)
             
-def save_results(trials, calibration_params, out_path=None, direction_stats = None):
+def save_results(trials, calibration_params, out_path=None):
     """Save trial results to CSV file"""
     try:
         # Default output path if not provided

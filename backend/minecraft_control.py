@@ -22,7 +22,7 @@ class MouseKeyboardReplacement(threading.Thread):
         self.direction = None
         self.left_start_time = 0
         self.right_start_time = 0
-        pyautogui.FAILSAFE = True     #M: stops when mouse moved to corner 
+        pyautogui.FAILSAFE = False     #M: stops when mouse moved to corner 
         print(f"Class MouseKeyboardReplacement started as thread")
                     # DEBUG
         print(f"MINECRAFT_CONTROL: Queue type: {type(self.eog_reader.signal)}")

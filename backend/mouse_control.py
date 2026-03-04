@@ -7,6 +7,7 @@ import config
 class MouseControl(threading.Thread):
 
     def __init__(self, eog_reader):
+        pyautogui.FAILSAFE = True     #M: stops when mouse moved to corner 
         self.eog_reader = eog_reader
         self.last_blink_time = None
         self.speed = 10
